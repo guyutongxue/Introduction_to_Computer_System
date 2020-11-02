@@ -1,0 +1,10 @@
+*
+!/sim
+!/.gitignore
+!/sim/misc
+!/sim/misc/*.ys
+!/sim/seq
+!/sim/seq/seq-full.hcl
+!/sim/pipe
+!/sim/pipe/ncopy.ys
+!/sim/pipe/pipe-full.hcl
