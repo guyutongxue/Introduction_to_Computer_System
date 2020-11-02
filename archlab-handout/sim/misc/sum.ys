@@ -1,0 +1,40 @@
+# PKU ICS ArchLab Handin (Part A)
+#
+# @file sum.ys
+# @author Guyutongxue <1900012983@pku.edu.cn>
+# 
+# This file is distributed under WTFPL <https://www.wtfpl.net> WITHOUT ANY WARRANTY.
+
+    .pos 0
+    irmovq stack, %rsp
+    irmovq ele1, %rdi
+    call sum_list
+    halt
+
+# sample linked list
+    .align 8
+ele1:
+    .quad 0x00a
+    .quad ele2
+ele2:
+    .quad 0x0b0
+    .quad ele3
+ele3:
+    .quad 0xc00
+    .quad 0x0
+
+sum_list:
+    irmovq $0, %rax
+loop_begin:
+    irmovq $0, %r8
+    subq %r8, %rdi
+    je loop_end
+    mrmovq 0x0(%rdi), %r8
+    addq %r8, %rax
+    mrmovq 0x8(%rdi), %rdi
+    jmp loop_begin
+loop_end:
+    ret
+
+    .pos 0x200
+stack:

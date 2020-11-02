@@ -1,0 +1,64 @@
+# PKU ICS ArchLab Handin (Part A)
+#
+# @file bubble.ys
+# @author Guyutongxue <1900012983@pku.edu.cn>
+# 
+# This file is distributed under WTFPL <https://www.wtfpl.net> WITHOUT ANY WARRANTY.
+
+    .pos 0
+    irmovq stack, %rsp
+    irmovq Array, %rdi
+    irmovq $0x6, %rsi
+    call bubble_sort
+    halt
+
+# sample array
+    .align 8
+Array:
+    .quad 0xbca
+    .quad 0xcba
+    .quad 0xacb
+    .quad 0xcab
+    .quad 0xabc
+    .quad 0xbac
+
+bubble_sort:
+    irmovq $8, %r8
+    irmovq $1, %r9
+    rrmovq %rsi, %r10 # long i = n;
+    rrmovq %rdi, %rsi # long last = data;
+get_last_loop:        # do {
+    addq %r8, %rsi    #   last += 8;
+    subq %r9, %r10    #   i--;
+    jne get_last_loop # } while (i != 1);
+    jmp test
+accumulate:
+    addq %r8, %rax
+loop:
+    rrmovq %rax, %r11
+    subq %rsi, %rax
+    rrmovq %r11, %rax
+    jge continue
+    mrmovq 0x8(%rax), %rdx
+    mrmovq 0x0(%rax), %rcx
+    rrmovq %rdx, %r11
+    subq %rcx, %rdx
+    rrmovq %r11, %rdx
+    jge accumulate
+    rmmovq %rcx, 0x8(%rax)
+    rmmovq %rdx, 0x0(%rax)
+    jmp    accumulate
+continue:
+    subq    %r8, %rsi
+test:
+    rrmovq %rsi, %r11
+    subq %rdi, %rsi
+    rrmovq %r11, %rsi
+    je end
+    rrmovq %rdi, %rax
+    jmp loop
+end:
+    ret
+
+    .pos 0x200
+stack:
