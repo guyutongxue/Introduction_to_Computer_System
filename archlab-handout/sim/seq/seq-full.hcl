@@ -1,6 +1,6 @@
 # PKU ICS ArchLab Handin (Part B)
 #
-# @file bubble.ys
+# @file seq-full.hcl
 # @author Guyutongxue <1900012983@pku.edu.cn>
 # 
 # This file is distributed under WTFPL <https://www.wtfpl.net> WITHOUT ANY WARRANTY.
