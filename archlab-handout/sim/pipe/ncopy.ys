@@ -1,3 +1,15 @@
+# PKU ICS ArchLab Handin (Part C)
+#
+# @file ncopy.ys
+# @author Guyutongxue <1900012983@pku.edu.cn>
+# 
+# This file is distributed under WTFPL <https://www.wtfpl.net> WITHOUT ANY WARRANTY.
+
+# CHANGE TO THIS FILE
+# ===================
+# - Use instruction `iaddq`.
+# - Do the loop unrolling. (9 elements for 1 loop)
+
 #/* $begin ncopy-ys */
 ##################################################################
 # ncopy.ys - Copy a src block of len words to dst.
@@ -15,24 +27,109 @@ ncopy:
 
 ##################################################################
 # You can modify this portion
-	# Loop header
-	xorq %rax,%rax		# count = 0;
-	andq %rdx,%rdx		# len <= 0?
-	jle Done		# if so, goto Done:
+	# no one cares about callee-save things
+	# pushq %rbx
+	# pushq %rbp
+	# pushq %r12
+	# pushq %r13
 
-Loop:	mrmovq (%rdi), %r10	# read val from src...
-	rmmovq %r10, (%rsi)	# ...and store it to dst
-	andq %r10, %r10		# val <= 0?
-	jle Npos		# if so, goto Npos:
-	irmovq $1, %r10
-	addq %r10, %rax		# count++
-Npos:	irmovq $1, %r10
-	subq %r10, %rdx		# len--
-	irmovq $8, %r10
-	addq %r10, %rdi		# src++
-	addq %r10, %rsi		# dst++
-	andq %rdx,%rdx		# len > 0?
-	jg Loop			# if so, goto Loop:
+	# use the default 0 value
+	# xorq %rax,%rax
+	jmp test
+
+loop:
+	mrmovq $0x40(%rdi), %r13
+	mrmovq $0x38(%rdi), %rcx
+	mrmovq $0x30(%rdi), %r8
+	mrmovq $0x28(%rdi), %r9
+	mrmovq $0x20(%rdi), %r10
+	mrmovq $0x18(%rdi), %r11
+	mrmovq $0x10(%rdi), %rbx
+	mrmovq $0x08(%rdi), %rbp
+	mrmovq $0x00(%rdi), %r12
+	rmmovq %r13, $0x40(%rsi)
+	andq %r13, %r13
+	jle npos0_1
+	iaddq $1, %rax
+npos0_1:
+	rmmovq %rcx, $0x38(%rsi)
+	andq %rcx, %rcx
+	jle npos0
+	iaddq $1, %rax
+npos0:
+	rmmovq %r8 , $0x30(%rsi)
+	andq %r8, %r8
+	jle npos1
+	iaddq $1, %rax
+npos1:
+	rmmovq %r9 , $0x28(%rsi)
+	andq %r9, %r9
+	jle npos2
+	iaddq $1, %rax
+npos2:
+	rmmovq %r10, $0x20(%rsi)
+	andq %r10, %r10
+	jle npos3
+	iaddq $1, %rax
+npos3:
+	rmmovq %r11, $0x18(%rsi)
+	andq %r11, %r11
+	jle npos4
+	iaddq $1, %rax
+npos4:
+	rmmovq %rbx, $0x10(%rsi)
+	andq %rbx, %rbx
+	jle npos5
+	iaddq $1, %rax
+npos5:
+	rmmovq %rbp, $0x08(%rsi)
+	andq %rbp, %rbp
+	jle npos6
+	iaddq $1, %rax
+npos6:
+	rmmovq %r12, $0x00(%rsi)
+	andq %r12, %r12
+	jle npos7
+	iaddq $1, %rax
+npos7:
+	iaddq $72, %rdi
+	iaddq $72, %rsi
+test:
+	andq %rdx, %rdx
+	je almost_done
+	iaddq $-9, %rdx
+	jge loop
+	mrmovq $0x00(%rdi), %r12
+	iaddq $8, %rdx
+	je npos6
+	mrmovq $0x08(%rdi), %rbp
+	iaddq $-1, %rdx
+	je npos5
+	mrmovq $0x10(%rdi), %rbx
+	iaddq $-1, %rdx
+	je npos4
+	mrmovq $0x18(%rdi), %r11
+	iaddq $-1, %rdx
+	je npos3
+	mrmovq $0x20(%rdi), %r10
+	iaddq $-1, %rdx
+	je npos2
+	mrmovq $0x28(%rdi), %r9
+	iaddq $-1, %rdx
+	je npos1
+	mrmovq $0x30(%rdi), %r8
+	iaddq $-1, %rdx
+	je npos0
+	mrmovq $0x38(%rdi), %rcx
+	iaddq $-1, %rdx
+	je npos0_1
+almost_done:
+	# popq %r13
+	# popq %r12
+	# popq %rbp
+	# popq %rbx
+	ret
+
 ##################################################################
 # Do not modify the following section of code
 # Function epilogue.

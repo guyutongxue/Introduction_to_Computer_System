@@ -5,6 +5,10 @@
 # 
 # This file is distributed under WTFPL <https://www.wtfpl.net> WITHOUT ANY WARRANTY.
 
+# CHANGE TO THIS FILE
+# ===================
+# Add the implementation of instructions `iaddq` and `jm` (not used).
+
 #/* $begin pipe-all-hcl */
 ####################################################################
 #    HCL Description of Control for Pipelined Y86-64 Processor     #
