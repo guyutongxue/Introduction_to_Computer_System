@@ -96,33 +96,49 @@ npos7:
 	iaddq $72, %rsi
 test:
 	andq %rdx, %rdx
-	je almost_done
+	jle almost_done
 	iaddq $-9, %rdx
 	jge loop
+	iaddq $4, %rdx
+	jge J4567
+J0123:
+	iaddq $2, %rdx
+	jge J23
+J01:
+	iaddq $1, %rdx
 	mrmovq $0x00(%rdi), %r12
-	iaddq $8, %rdx
-	je npos6
+	jl npos6
 	mrmovq $0x08(%rdi), %rbp
-	iaddq $-1, %rdx
-	je npos5
+	jmp npos5
+J23:
+	mrmovq $0x00(%rdi), %r12
+	mrmovq $0x08(%rdi), %rbp
 	mrmovq $0x10(%rdi), %rbx
-	iaddq $-1, %rdx
 	je npos4
 	mrmovq $0x18(%rdi), %r11
 	iaddq $-1, %rdx
-	je npos3
+	jmp npos3
+J4567:
+	mrmovq $0x00(%rdi), %r12
+	mrmovq $0x08(%rdi), %rbp
+	mrmovq $0x10(%rdi), %rbx
+	mrmovq $0x18(%rdi), %r11
+	iaddq $-2, %rdx
+	jge J67
+J45:
+	iaddq $1, %rdx
 	mrmovq $0x20(%rdi), %r10
-	iaddq $-1, %rdx
-	je npos2
+	jl npos2
 	mrmovq $0x28(%rdi), %r9
-	iaddq $-1, %rdx
-	je npos1
+	jmp npos1
+J67:
+	mrmovq $0x20(%rdi), %r10
+	mrmovq $0x28(%rdi), %r9
 	mrmovq $0x30(%rdi), %r8
-	iaddq $-1, %rdx
 	je npos0
 	mrmovq $0x38(%rdi), %rcx
 	iaddq $-1, %rdx
-	je npos0_1
+	jmp npos0_1
 almost_done:
 	# popq %r13
 	# popq %r12
