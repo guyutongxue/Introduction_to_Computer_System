@@ -47,6 +47,8 @@ wordsig IPUSHQ	'I_PUSHQ'
 wordsig IPOPQ	'I_POPQ'
 # Instruction code for iaddq instruction
 wordsig IIADDQ	'I_IADDQ'
+# Try adding instruction jm
+wordsig IJM     'I_JM'
 
 ##### Symbolic represenations of Y86-64 function codes            #####
 wordsig FNONE    'F_NONE'        # Default function code
@@ -145,7 +147,7 @@ word f_pc = [
 	# Mispredicted branch.  Fetch at incremented PC
 	M_icode == IJXX && !M_Cnd : M_valA;
 	# Completion of RET instruction
-	W_icode == IRET : W_valM;
+	W_icode in { IRET, IJM } : W_valM;
 	# Default: Use predicted value of PC
 	1 : F_predPC;
 ];
@@ -165,7 +167,7 @@ word f_ifun = [
 # Is instruction valid?
 bool instr_valid = f_icode in 
 	{ INOP, IHALT, IRRMOVQ, IIRMOVQ, IRMMOVQ, IMRMOVQ,
-	  IOPQ, IJXX, ICALL, IRET, IPUSHQ, IPOPQ, IIADDQ };
+	  IOPQ, IJXX, ICALL, IRET, IPUSHQ, IPOPQ, IIADDQ, IJM };
 
 # Determine status code for fetched instruction
 word f_stat = [
@@ -178,11 +180,11 @@ word f_stat = [
 # Does fetched instruction require a regid byte?
 bool need_regids =
 	f_icode in { IRRMOVQ, IOPQ, IPUSHQ, IPOPQ, 
-		     IIRMOVQ, IRMMOVQ, IMRMOVQ, IIADDQ };
+		     IIRMOVQ, IRMMOVQ, IMRMOVQ, IIADDQ, IJM };
 
 # Does fetched instruction require a constant word?
 bool need_valC =
-	f_icode in { IIRMOVQ, IRMMOVQ, IMRMOVQ, IJXX, ICALL, IIADDQ };
+	f_icode in { IIRMOVQ, IRMMOVQ, IMRMOVQ, IJXX, ICALL, IIADDQ, IJM };
 
 # Predict next value of PC
 word f_predPC = [
@@ -202,7 +204,7 @@ word d_srcA = [
 
 ## What register should be used as the B source?
 word d_srcB = [
-	D_icode in { IOPQ, IRMMOVQ, IMRMOVQ, IIADDQ } : D_rB;
+	D_icode in { IOPQ, IRMMOVQ, IMRMOVQ, IIADDQ, IJM } : D_rB;
 	D_icode in { IPUSHQ, IPOPQ, ICALL, IRET } : RRSP;
 	1 : RNONE;  # Don't need register
 ];
@@ -246,7 +248,7 @@ word d_valB = [
 ## Select input A to ALU
 word aluA = [
 	E_icode in { IRRMOVQ, IOPQ } : E_valA;
-	E_icode in { IIRMOVQ, IRMMOVQ, IMRMOVQ, IIADDQ } : E_valC;
+	E_icode in { IIRMOVQ, IRMMOVQ, IMRMOVQ, IIADDQ, IJM } : E_valC;
 	E_icode in { ICALL, IPUSHQ } : -8;
 	E_icode in { IRET, IPOPQ } : 8;
 	# Other instructions don't need ALU
@@ -255,7 +257,7 @@ word aluA = [
 ## Select input B to ALU
 word aluB = [
 	E_icode in { IRMMOVQ, IMRMOVQ, IOPQ, ICALL, 
-		     IPUSHQ, IRET, IPOPQ, IIADDQ } : E_valB;
+		     IPUSHQ, IRET, IPOPQ, IIADDQ, IJM } : E_valB;
 	E_icode in { IRRMOVQ, IIRMOVQ } : 0;
 	# Other instructions don't need ALU
 ];
@@ -284,13 +286,13 @@ word e_dstE = [
 
 ## Select memory address
 word mem_addr = [
-	M_icode in { IRMMOVQ, IPUSHQ, ICALL, IMRMOVQ } : M_valE;
+	M_icode in { IRMMOVQ, IPUSHQ, ICALL, IMRMOVQ, IJM } : M_valE;
 	M_icode in { IPOPQ, IRET } : M_valA;
 	# Other instructions don't need address
 ];
 
 ## Set read control signal
-bool mem_read = M_icode in { IMRMOVQ, IPOPQ, IRET };
+bool mem_read = M_icode in { IMRMOVQ, IPOPQ, IRET, IJM };
 
 ## Set write control signal
 bool mem_write = M_icode in { IRMMOVQ, IPUSHQ, ICALL };
@@ -331,7 +333,9 @@ bool F_stall =
 	E_icode in { IMRMOVQ, IPOPQ } &&
 	 E_dstM in { d_srcA, d_srcB } ||
 	# Stalling at fetch while ret passes through pipeline
-	IRET in { D_icode, E_icode, M_icode };
+	IRET in { D_icode, E_icode, M_icode } ||
+	# jm
+	IJM in {D_icode, E_icode, M_icode };
 
 # Should I stall or inject a bubble into Pipeline Register D?
 # At most one of these can be true.
@@ -346,7 +350,8 @@ bool D_bubble =
 	# Stalling at fetch while ret passes through pipeline
 	# but not condition for a load/use hazard
 	!(E_icode in { IMRMOVQ, IPOPQ } && E_dstM in { d_srcA, d_srcB }) &&
-	  IRET in { D_icode, E_icode, M_icode };
+	  (IRET in { D_icode, E_icode, M_icode } ||
+	  IJM in {D_icode, E_icode, M_icode });
 
 # Should I stall or inject a bubble into Pipeline Register E?
 # At most one of these can be true.
