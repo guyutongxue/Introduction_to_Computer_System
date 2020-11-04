@@ -8,7 +8,19 @@
 # CHANGE TO THIS FILE
 # ===================
 # - Use instruction `iaddq`.
-# - Do the loop unrolling. (9 elements for 1 loop)
+# - Do the loop unrolling. (10 elements for 1 loop)
+# - Dealing with remaiders:
+#            (remainder)
+#             [0 ... 9]
+#                 |
+#       +---------+---------+
+#      /          |          \  (rLeast2)
+#     0           1       [2 ... 9]  <------------+
+#  (rOnly0)    (rOnly1)       |                   |
+#                      +------+------+            | -= 2
+#                     /       |       \           |
+#                    2        3    [4 ... 9] -----+
+#                (rOnly2)  (rOnly3)  (rLeast4)                 
 
 #/* $begin ncopy-ys */
 ##################################################################
@@ -27,124 +39,136 @@ ncopy:
 
 ##################################################################
 # You can modify this portion
-	# no one cares about callee-save things
-	# pushq %rbx
-	# pushq %rbp
-	# pushq %r12
-	# pushq %r13
-
-	# use the default 0 value
-	# xorq %rax,%rax
-	jmp test
-
-loop:
-	mrmovq $0x40(%rdi), %r13
-	mrmovq $0x38(%rdi), %rcx
-	mrmovq $0x30(%rdi), %r8
-	mrmovq $0x28(%rdi), %r9
-	mrmovq $0x20(%rdi), %r10
-	mrmovq $0x18(%rdi), %r11
-	mrmovq $0x10(%rdi), %rbx
-	mrmovq $0x08(%rdi), %rbp
-	mrmovq $0x00(%rdi), %r12
-	rmmovq %r13, $0x40(%rsi)
-	andq %r13, %r13
-	jle npos0_1
+	iaddq $-10,%rdx
+	jl remainder
+loopBegin:	
+	mrmovq 0x00(%rdi), %r8
+	mrmovq 0x08(%rdi), %r9
+	mrmovq 0x10(%rdi), %r10
+	mrmovq 0x18(%rdi), %r11
+	mrmovq 0x20(%rdi), %r12
+	mrmovq 0x28(%rdi), %r13
+	mrmovq 0x30(%rdi), %r14
+	mrmovq 0x38(%rdi), %rcx
+	mrmovq 0x40(%rdi), %rbx
+	mrmovq 0x48(%rdi), %rbp
+ele0:
+	rmmovq %r8,  0x00(%rsi)
+	rmmovq %r9,  0x08(%rsi)
+	andq %r8,%r8
+	jle ele1
 	iaddq $1, %rax
-npos0_1:
-	rmmovq %rcx, $0x38(%rsi)
-	andq %rcx, %rcx
-	jle npos0
+ele1:
+	andq %r9,%r9
+	jle ele2
 	iaddq $1, %rax
-npos0:
-	rmmovq %r8 , $0x30(%rsi)
-	andq %r8, %r8
-	jle npos1
+ele2:
+	rmmovq %r10, 0x10(%rsi)
+	rmmovq %r11, 0x18(%rsi)
+	andq %r10,%r10
+	jle ele3
 	iaddq $1, %rax
-npos1:
-	rmmovq %r9 , $0x28(%rsi)
-	andq %r9, %r9
-	jle npos2
+ele3:
+	andq %r11,%r11
+	jle ele4
 	iaddq $1, %rax
-npos2:
-	rmmovq %r10, $0x20(%rsi)
-	andq %r10, %r10
-	jle npos3
+ele4:
+	rmmovq %r12, 0x20(%rsi)
+	rmmovq %r13, 0x28(%rsi)
+	andq %r12,%r12
+	jle ele5
 	iaddq $1, %rax
-npos3:
-	rmmovq %r11, $0x18(%rsi)
-	andq %r11, %r11
-	jle npos4
+ele5:
+	andq %r13,%r13
+	jle ele6
 	iaddq $1, %rax
-npos4:
-	rmmovq %rbx, $0x10(%rsi)
+ele6:
+	rmmovq %r14, 0x30(%rsi)
+	rmmovq %rcx, 0x38(%rsi)
+	andq %r14,%r14
+	jle ele7
+	iaddq $1, %rax
+ele7:
+	andq %rcx,%rcx
+	jle ele8
+	iaddq $1, %rax
+ele8:
+	rmmovq %rbx, 0x40(%rsi)
+	rmmovq %rbp, 0x48(%rsi)
 	andq %rbx, %rbx
-	jle npos5
+	jle ele9
 	iaddq $1, %rax
-npos5:
-	rmmovq %rbp, $0x08(%rsi)
+ele9:
 	andq %rbp, %rbp
-	jle npos6
+	jle decrease
 	iaddq $1, %rax
-npos6:
-	rmmovq %r12, $0x00(%rsi)
-	andq %r12, %r12
-	jle npos7
-	iaddq $1, %rax
-npos7:
-	iaddq $72, %rdi
-	iaddq $72, %rsi
-test:
-	andq %rdx, %rdx
-	jle almost_done
-	iaddq $-9, %rdx
-	jge loop
-	iaddq $4, %rdx
-	jge J4567
-J0123:
-	iaddq $2, %rdx
-	jge J23
-J01:
-	iaddq $1, %rdx
-	mrmovq $0x00(%rdi), %r12
-	jl npos6
-	mrmovq $0x08(%rdi), %rbp
-	jmp npos5
-J23:
-	mrmovq $0x00(%rdi), %r12
-	mrmovq $0x08(%rdi), %rbp
-	mrmovq $0x10(%rdi), %rbx
-	je npos4
-	mrmovq $0x18(%rdi), %r11
-	iaddq $-1, %rdx
-	jmp npos3
-J4567:
-	mrmovq $0x00(%rdi), %r12
-	mrmovq $0x08(%rdi), %rbp
-	mrmovq $0x10(%rdi), %rbx
-	mrmovq $0x18(%rdi), %r11
-	iaddq $-2, %rdx
-	jge J67
-J45:
-	iaddq $1, %rdx
-	mrmovq $0x20(%rdi), %r10
-	jl npos2
-	mrmovq $0x28(%rdi), %r9
-	jmp npos1
-J67:
-	mrmovq $0x20(%rdi), %r10
-	mrmovq $0x28(%rdi), %r9
-	mrmovq $0x30(%rdi), %r8
-	je npos0
-	mrmovq $0x38(%rdi), %rcx
-	iaddq $-1, %rdx
-	jmp npos0_1
-almost_done:
-	# popq %r13
-	# popq %r12
-	# popq %rbp
-	# popq %rbx
+decrease:
+	iaddq $80, %rdi
+	iaddq $80, %rsi
+	iaddq $-10, %rdx
+	jge loopBegin
+remainder:                 # %rdx in [-10 ... -1],       represents r in [0 ... 9]
+	iaddq $9, %rdx         # %rdx in [-1, 0, 1, ..., 8], represents r in [0, 1, 2, ..., 9]
+	jg rLeast2             # %rdx in [1 ... 8],          represents r in [2 ... 9]
+	mrmovq 0x00(%rdi), %r8 # (Prevent L/U harzard)
+	jl Done                # %rdx == -1,                 represents r == 0 (rOnly0)
+rOnly1:                    # %rdx == 0,                  represents r == 1
+	rmmovq %r8, 0x00(%rsi)
+		andq %r8, %r8
+		jle Done
+		iaddq $1, %rax
 	ret
+rLeast2:                   # %rdx in [1 ... ],         represents r in [2 ... ]
+	mrmovq 0x00(%rdi), %r8 
+	mrmovq 0x08(%rdi), %r9
+	iaddq $-2, %rdx        # %rdx in [-1, 0, 1, ... ], represents r in [2 ... ]
+	jg rLeast4             # %rdx in [1 ... ],         represents r in [4 ... ]
+	je rOnly3              # %rdx == 0,                represents r == 3
+rOnly2:                    # %rdx == -1,               represents r == 2
+	rmmovq %r8, 0x00(%rsi)
+	rmmovq %r9, 0x08(%rsi)
+	rOnly2_ele0:
+		andq %r8, %r8
+		jle rOnly2_ele1
+		iaddq $1, %rax
+	rOnly2_ele1:
+		andq %r9, %r9
+		jle Done
+		iaddq $1, %rax
+	ret
+rOnly3:
+	mrmovq 0x10(%rdi), %r10
+	rmmovq %r8,  0x00(%rsi)
+	rmmovq %r9,  0x08(%rsi)
+	rmmovq %r10, 0x10(%rsi)
+	rOnly3_ele0:
+		andq %r8, %r8
+		jle rOnly3_ele1
+		iaddq $1, %rax
+	rOnly3_ele1:
+		andq %r9, %r9
+		jle rOnly3_ele2
+		iaddq $1, %rax
+	rOnly3_ele2:
+		andq %r10, %r10
+		jle Done
+		iaddq $1, %rax
+	ret
+rLeast4:                    # %rdx in [1 ... k], represents r in [4 ... (k + 3)]
+	rmmovq %r8, 0x00(%rsi)
+	rmmovq %r9, 0x08(%rsi)
+	rLeast4_ele0:
+		andq %r8,%r8
+		jle rLeast4_ele1
+		iaddq $1, %rax
+	rLeast4_ele1:
+		andq %r9, %r9
+		jle rLeast4_ele2
+		iaddq $1, %rax
+	rLeast4_ele2:
+		iaddq $16, %rdi
+		iaddq $16, %rsi
+		jmp rLeast2         # %rdx in [1 ... (k - 2)], represents r in [2 ... (k + 1)]
 
 ##################################################################
 # Do not modify the following section of code
