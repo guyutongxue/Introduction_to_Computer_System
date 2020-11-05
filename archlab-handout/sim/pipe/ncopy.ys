@@ -39,6 +39,16 @@ ncopy:
 
 ##################################################################
 # You can modify this portion
+
+	# who cares these callee-saved stuff?
+	# pushq %rbx
+	# pushq %rbp
+	# pushq %r12
+	# pushq %r13
+	# pushq %r14
+
+	# use initial value of %rax
+	# xorq %rax, %rax
 	iaddq $-10,%rdx
 	jl remainder
 loopBegin:	
@@ -111,11 +121,11 @@ remainder:                 # %rdx in [-10 ... -1],       represents r in [0 ... 
 	iaddq $9, %rdx         # %rdx in [-1, 0, 1, ..., 8], represents r in [0, 1, 2, ..., 9]
 	jg rLeast2             # %rdx in [1 ... 8],          represents r in [2 ... 9]
 	mrmovq 0x00(%rdi), %r8 # (Prevent L/U harzard)
-	jl Done                # %rdx == -1,                 represents r == 0 (rOnly0)
+	jl almostDone          # %rdx == -1,                 represents r == 0 (rOnly0)
 rOnly1:                    # %rdx == 0,                  represents r == 1
 	rmmovq %r8, 0x00(%rsi)
 		andq %r8, %r8
-		jle Done
+		jle almostDone
 		iaddq $1, %rax
 	ret
 rLeast2:                   # %rdx in [1 ... ],         represents r in [2 ... ]
@@ -133,7 +143,7 @@ rOnly2:                    # %rdx == -1,               represents r == 2
 		iaddq $1, %rax
 	rOnly2_ele1:
 		andq %r9, %r9
-		jle Done
+		jle almostDone
 		iaddq $1, %rax
 	ret
 rOnly3:
@@ -151,7 +161,7 @@ rOnly3:
 		iaddq $1, %rax
 	rOnly3_ele2:
 		andq %r10, %r10
-		jle Done
+		jle almostDone
 		iaddq $1, %rax
 	ret
 rLeast4:                    # %rdx in [1 ... k], represents r in [4 ... (k + 3)]
@@ -169,7 +179,14 @@ rLeast4:                    # %rdx in [1 ... k], represents r in [4 ... (k + 3)]
 		iaddq $16, %rdi
 		iaddq $16, %rsi
 		jmp rLeast2         # %rdx in [1 ... (k - 2)], represents r in [2 ... (k + 1)]
-
+almostDone:
+	# popq %r14
+	# popq %r13
+	# popq %r12
+	# popq %rbp
+	# popq %rbx
+	ret
+	
 ##################################################################
 # Do not modify the following section of code
 # Function epilogue.
