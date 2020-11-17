@@ -1,0 +1,9 @@
+48 c7 c7 ea 4a a6 45 48 
+83 c4 08 c3 cc cc cc cc
+cc cc cc cc cc cc cc cc
+cc cc cc cc cc cc cc cc
+cc cc cc cc cc cc cc cc
+78 e8 66 55 00 00 00 00
+cc cc cc cc cc cc cc cc
+54 1a 40 00 00 00 00 00
+0a

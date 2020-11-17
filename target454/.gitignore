@@ -1,0 +1,5 @@
+[crs]target
+*.o
+hex2raw
+farm.c
+README.txt

