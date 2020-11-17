@@ -34,6 +34,8 @@ Edit files:
 
 ## AttackLab
 
+*Online lab*
+
 New files:
 - `phase*.txt`
 - `*target.objdump`
