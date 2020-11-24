@@ -9,8 +9,12 @@
  *
  */
 
+// This file is distributed under WTFPL
+// <https://www.wtfpl.net> WITHOUT ANY WARRANTY.
+
 // This file should compiled under C99 Standard.
-// This file follows Google C++ Style Guide.
+// This file follows Google C++ Style Guide
+//     <https://google.github.io/styleguide/cppguide.html>
 
 #include <ctype.h>
 #include <errno.h>
@@ -25,7 +29,7 @@
 #include <unistd.h>
 
 // CacheLab utility
-#include "cachelab.h"
+#include "./cachelab.h"
 
 /**
  * @brief Structure for saving info about a cache line
@@ -53,7 +57,7 @@ uint64_t set_index_mask;
 /// What we want
 unsigned eviction_count, hit_count, miss_count;
 
-/// Global counter, determine how to evict line
+/// Global timer, determine how to evict line
 unsigned lru_counter = 1;
 
 /// Is verbose output
@@ -156,7 +160,6 @@ void ReplayTrace(char* filepath) {
     }
     fclose(file);
   }
-  printf("%lx\n", set_index_mask);
 }
 
 /**
@@ -208,7 +211,8 @@ int main(int argc, char** argv) {
         sscanf(optarg, "%u", &b);
         break;
       case 't':
-        strcpy(trace_file, optarg);
+        // Use snprintf instead of strcpy for safety reason
+        snprintf(trace_file, sizeof(trace_file), "%s", optarg);
         break;
       case 'v':
         verbosity = true;
