@@ -69,8 +69,16 @@ bool verbosity;
  */
 void InitCache(void) {
   cache = malloc(sizeof(struct CacheLine*) * S);
+  if (!cache) {
+    fprintf(stderr, "Bad alloc error, %s.", strerror(errno));
+    exit(EXIT_FAILURE);
+  }
   for (unsigned i = 0; i < S; i++) {
     cache[i] = malloc(sizeof(struct CacheLine) * E);
+    if (!cache[i]) {
+      fprintf(stderr, "Bad alloc error, %s.", strerror(errno));
+      exit(EXIT_FAILURE);
+    }
     for (unsigned j = 0; j < E; j++) {
       cache[i][j] = (struct CacheLine){0, 0, 0};
     }
@@ -230,6 +238,10 @@ int main(int argc, char** argv) {
   if (s == 0 || E == 0 || b == 0 || !trace_file[0]) {
     fprintf(stderr, "%s: Failed fetching command line argument.\n", argv[0]);
     printUsage(argv[0]);
+    exit(EXIT_FAILURE);
+  }
+  if (s <0 || E < 0 || b < 0) {
+    fprintf(stderr, "%s: Negative arguments is not permitted.", argv[0]);
     exit(EXIT_FAILURE);
   }
   S = 1 << s;
