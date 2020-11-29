@@ -240,8 +240,8 @@ int main(int argc, char** argv) {
     printUsage(argv[0]);
     exit(EXIT_FAILURE);
   }
-  if (s <0 || E < 0 || b < 0) {
-    fprintf(stderr, "%s: Negative arguments is not permitted.", argv[0]);
+  if (s >= 32 || E >= 32 || b >= 32) {
+    fprintf(stderr, "%s: One or more argument(s) out of range.", argv[0]);
     exit(EXIT_FAILURE);
   }
   S = 1 << s;
