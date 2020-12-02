@@ -117,10 +117,10 @@ handler_t *Signal(int signum, handler_t *handler);
 
 /**
  * @brief The shell's main routine
- * 
- * @param argc 
- * @param argv 
- * @return int 
+ *
+ * @param argc
+ * @param argv
+ * @return int
  */
 int main(int argc, char **argv) {
   char c;
@@ -194,15 +194,15 @@ int main(int argc, char **argv) {
 
 /**
  * @brief Evaluate the command line that the user has just typed in
- * 
+ *
  * If the user has requested a built-in command (quit, jobs, bg or fg)
  * then execute it immediately. Otherwise, fork a child process and
  * run the job in the context of the child. If the job is running in
  * the foreground, wait for it to terminate and then return.  Note:
  * each child process must have a unique process group ID so that our
  * background children don't receive SIGINT (SIGTSTP) from the kernel
- * when we type ctrl-c (ctrl-z) at the keyboard. 
- * @param cmdline 
+ * when we type ctrl-c (ctrl-z) at the keyboard.
+ * @param cmdline
  */
 void eval(char *cmdline) {
   int bg; /* should the job run in bg or fg? */
@@ -238,10 +238,10 @@ void eval(char *cmdline) {
  *
  * Note:       The string elements of tok (e.g., argv[], infile, outfile)
  *             are statically allocated inside parseline() and will be
- *             overwritten the next time this function is invoked. 
- * @param cmdline 
- * @param tok 
- * @return int 
+ *             overwritten the next time this function is invoked.
+ * @param cmdline
+ * @param tok
+ * @return int
  */
 int parseline(const char *cmdline, struct cmdline_tokens *tok) {
   static char array[MAXLINE];        /* holds local copy of command line */
@@ -381,12 +381,12 @@ int parseline(const char *cmdline, struct cmdline_tokens *tok) {
  * received a SIGSTOP, SIGTSTP, SIGTTIN or SIGTTOU signal. The
  * handler reaps all available zombie children, but doesn't wait
  * for any other currently running children to terminate.
- * @param sig 
+ * @param sig
  */
 void sigchld_handler(int sig) { return; }
 
 /**
- * @brief 
+ * @brief
  * The kernel sends a SIGINT to the shell whenver the
  * user types ctrl-c at the keyboard.  Catch it and send it along
  * to the foreground job.
@@ -395,7 +395,7 @@ void sigchld_handler(int sig) { return; }
 void sigint_handler(int sig) { return; }
 
 /**
- * @brief 
+ * @brief
  * The kernel sends a SIGTSTP to the shell whenever
  * the user types ctrl-z at the keyboard. Catch it and suspend the
  * foreground job by sending it a SIGTSTP.
@@ -404,7 +404,7 @@ void sigint_handler(int sig) { return; }
 void sigtstp_handler(int sig) { return; }
 
 /**
- * @brief 
+ * @brief
  * The driver program can gracefully terminate the
  * child shell by sending it a SIGQUIT signal.
  * @param sig
@@ -422,9 +422,9 @@ void sigquit_handler(int sig) {
  **********************************************/
 
 /**
- * @brief Clear the entries in a job struct 
- * 
- * @param job 
+ * @brief Clear the entries in a job struct
+ *
+ * @param job
  */
 void clearjob(struct job_t *job) {
   job->pid = 0;
@@ -434,9 +434,9 @@ void clearjob(struct job_t *job) {
 }
 
 /**
- * @brief Initialize the job list 
- * 
- * @param job_list 
+ * @brief Initialize the job list
+ *
+ * @param job_list
  */
 void initjobs(struct job_t *job_list) {
   int i;
@@ -446,9 +446,9 @@ void initjobs(struct job_t *job_list) {
 
 /**
  * @brief Returns largest allocated job ID
- * 
- * @param job_list 
- * @return int 
+ *
+ * @param job_list
+ * @return int
  */
 int maxjid(struct job_t *job_list) {
   int i, max = 0;
@@ -460,12 +460,12 @@ int maxjid(struct job_t *job_list) {
 
 /**
  * @brief Add a job to the job list
- * 
- * @param job_list 
- * @param pid 
- * @param state 
- * @param cmdline 
- * @return int 
+ *
+ * @param job_list
+ * @param pid
+ * @param state
+ * @param cmdline
+ * @return int
  */
 int addjob(struct job_t *job_list, pid_t pid, int state, char *cmdline) {
   int i;
@@ -492,10 +492,10 @@ int addjob(struct job_t *job_list, pid_t pid, int state, char *cmdline) {
 
 /**
  * @brief Delete a job whose PID=pid from the job list
- * 
- * @param job_list 
- * @param pid 
- * @return int 
+ *
+ * @param job_list
+ * @param pid
+ * @return int
  */
 int deletejob(struct job_t *job_list, pid_t pid) {
   int i;
@@ -514,9 +514,9 @@ int deletejob(struct job_t *job_list, pid_t pid) {
 
 /**
  * @brief Return PID of current foreground job, 0 if no such job
- * 
- * @param job_list 
- * @return pid_t 
+ *
+ * @param job_list
+ * @return pid_t
  */
 pid_t fgpid(struct job_t *job_list) {
   int i;
@@ -528,10 +528,10 @@ pid_t fgpid(struct job_t *job_list) {
 
 /**
  * @brief Find a job (by PID) on the job list
- * 
- * @param job_list 
- * @param pid 
- * @return struct job_t* 
+ *
+ * @param job_list
+ * @param pid
+ * @return struct job_t*
  */
 struct job_t *getjobpid(struct job_t *job_list, pid_t pid) {
   int i;
@@ -544,10 +544,10 @@ struct job_t *getjobpid(struct job_t *job_list, pid_t pid) {
 
 /**
  * @brief Find a job (by JID) on the job list
- * 
- * @param job_list 
- * @param jid 
- * @return struct job_t* 
+ *
+ * @param job_list
+ * @param jid
+ * @return struct job_t*
  */
 struct job_t *getjobjid(struct job_t *job_list, int jid) {
   int i;
@@ -560,9 +560,9 @@ struct job_t *getjobjid(struct job_t *job_list, int jid) {
 
 /**
  * @brief Map process ID to job ID
- * 
- * @param pid 
- * @return int 
+ *
+ * @param pid
+ * @return int
  */
 int pid2jid(pid_t pid) {
   int i;
@@ -577,9 +577,9 @@ int pid2jid(pid_t pid) {
 
 /**
  * @brief Print the job list
- * 
- * @param job_list 
- * @param output_fd 
+ *
+ * @param job_list
+ * @param output_fd
  */
 void listjobs(struct job_t *job_list, int output_fd) {
   int i;
@@ -631,7 +631,7 @@ void listjobs(struct job_t *job_list, int output_fd) {
 
 /**
  * @brief print a help message
- * 
+ *
  */
 void usage(void) {
   printf("Usage: shell [-hvp]\n");
@@ -643,8 +643,8 @@ void usage(void) {
 
 /**
  * @brief unix-style error routine
- * 
- * @param msg 
+ *
+ * @param msg
  */
 void unix_error(char *msg) {
   fprintf(stdout, "%s: %s\n", msg, strerror(errno));
@@ -653,8 +653,8 @@ void unix_error(char *msg) {
 
 /**
  * @brief application-style error routine
- * 
- * @param msg 
+ *
+ * @param msg
  */
 void app_error(char *msg) {
   fprintf(stdout, "%s\n", msg);
@@ -663,11 +663,10 @@ void app_error(char *msg) {
 
 /* Private sio_functions */
 
-
 /**
  * @brief Reverse a string (from K&R)
- * 
- * @param s 
+ *
+ * @param s
  */
 static void sio_reverse(char s[]) {
   int c, i, j;
@@ -681,10 +680,10 @@ static void sio_reverse(char s[]) {
 
 /**
  * @brief Convert long to base b string (from K&R)
- * 
- * @param v 
- * @param s 
- * @param b 
+ *
+ * @param v
+ * @param s
+ * @param b
  */
 static void sio_ltoa(long v, char s[], int b) {
   int c, i = 0;
@@ -698,9 +697,9 @@ static void sio_ltoa(long v, char s[], int b) {
 
 /**
  * @brief Return length of string (from K&R)
- * 
- * @param s 
- * @return size_t 
+ *
+ * @param s
+ * @return size_t
  */
 static size_t sio_strlen(const char s[]) {
   int i = 0;
@@ -711,10 +710,10 @@ static size_t sio_strlen(const char s[]) {
 
 /**
  * @brief Copy len chars from fmt to s (by Ding Rui)
- * 
- * @param s 
- * @param fmt 
- * @param len 
+ *
+ * @param s
+ * @param fmt
+ * @param len
  */
 void sio_copy(char *s, const char *fmt, size_t len) {
   if (!len) return;
@@ -726,18 +725,17 @@ void sio_copy(char *s, const char *fmt, size_t len) {
 
 /**
  * @brief Put string
- * 
- * @param s 
- * @return ssize_t 
+ *
+ * @param s
+ * @return ssize_t
  */
 ssize_t sio_puts(char s[]) { return write(STDOUT_FILENO, s, sio_strlen(s)); }
 
-
 /**
  * @brief Put long
- * 
- * @param v 
- * @return ssize_t 
+ *
+ * @param v
+ * @return ssize_t
  */
 ssize_t sio_putl(long v) {
   char s[128];
@@ -748,10 +746,10 @@ ssize_t sio_putl(long v) {
 
 /**
  * @brief Put to the console. only understands %d
- * 
- * @param fmt 
- * @param ... 
- * @return ssize_t 
+ *
+ * @param fmt
+ * @param ...
+ * @return ssize_t
  */
 ssize_t sio_put(const char *fmt, ...) {
   va_list ap;
@@ -831,10 +829,10 @@ void sio_error(char s[]) {
 
 /**
  * @brief wrapper for the sigaction function
- * 
- * @param signum 
- * @param handler 
- * @return handler_t* 
+ *
+ * @param signum
+ * @param handler
+ * @return handler_t*
  */
 handler_t *Signal(int signum, handler_t *handler) {
   struct sigaction action, old_action;
