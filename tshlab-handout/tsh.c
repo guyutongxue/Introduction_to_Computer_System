@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,6 +57,8 @@ int verbose = 0;         /* if true, print additional output */
 int nextjid = 1;         /* next job ID to allocate */
 char sbuf[MAXLINE];      /* for composing sprintf messages */
 
+sigset_t mask, prev_mask;  ///< Mask for blocking signals
+
 struct job_t {           /* The job struct */
   pid_t pid;             /* job PID */
   int jid;               /* job ID [1, 2, ...] */
@@ -83,20 +86,33 @@ struct cmdline_tokens {
 /* End global variables */
 
 /* Function prototypes */
+
 void eval(char *cmdline);
 
 void sigchld_handler(int sig);
 void sigtstp_handler(int sig);
 void sigint_handler(int sig);
 
+/* Self defined functions */
+
+bool builtin_command(struct cmdline_tokens *tok, int *p_input_fd,
+                     int *p_output_fd, int bg, const char *cmdline);
+void close_files(int input_fd, int output_fd);
+void do_bgfg(char **argv, int output_fd);
+void kill_job(char **argv, int output_fd);
+void nohup_eval(struct cmdline_tokens *tok, int input_fd, int output_fd, int bg,
+                const char *cmdline);
+void waitfg(int pid, int output_fd);
+
 /* Here are helper routines that we've provided for you */
+
 int parseline(const char *cmdline, struct cmdline_tokens *tok);
 void sigquit_handler(int sig);
 
 void clearjob(struct job_t *job);
 void initjobs(struct job_t *job_list);
 int maxjid(struct job_t *job_list);
-int addjob(struct job_t *job_list, pid_t pid, int state, char *cmdline);
+int addjob(struct job_t *job_list, pid_t pid, int state, const char *cmdline);
 int deletejob(struct job_t *job_list, pid_t pid);
 pid_t fgpid(struct job_t *job_list);
 struct job_t *getjobpid(struct job_t *job_list, pid_t pid);
@@ -114,6 +130,70 @@ void sio_error(char s[]);
 
 typedef void handler_t(int);
 handler_t *Signal(int signum, handler_t *handler);
+
+/* Begin POSIX wrapper functions */
+
+int Sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
+  int result;
+  if ((result = sigprocmask(how, set, oldset)) < 0)
+    unix_error("sigprocmask error");
+  return result;
+}
+
+int Sigemptyset(sigset_t *set) {
+  int result;
+  if ((result = sigemptyset(set)) < 0) unix_error("sigemptyset error");
+  return result;
+}
+
+int Sigfillset(sigset_t *set) {
+  int result;
+  if ((result = sigfillset(set)) < 0) unix_error("sigfillset error");
+  return result;
+}
+
+int Sigaddset(sigset_t *set, int signum) {
+  int result;
+  if ((result = sigaddset(set, signum)) < 0) unix_error("sigaddset error");
+  return result;
+}
+
+int Sigdelset(sigset_t *set, int signum) {
+  int result;
+  if ((result = sigdelset(set, signum)) < 0) unix_error("sigdelset error");
+  return result;
+}
+
+int Fork(void) {
+  pid_t pid;
+  if ((pid = fork()) < 0) unix_error("fork error");
+  return pid;
+}
+
+int Setpgid(pid_t pid, pid_t pgid) {
+  int result;
+  if ((result = setpgid(pid, pgid)) < 0) unix_error("setpgid error");
+  return result;
+}
+
+int Write(int fd, const void *buf, size_t n) {
+  int result;
+  if ((result = write(fd, buf, n)) < 0) {
+    fwrite("Error writing to file\n", 1, 23, stderr);
+    exit(EXIT_FAILURE);
+  }
+  return result;
+}
+
+int Dup2(int oldfd, int newfd) {
+  int result;
+  if ((result = dup2(oldfd, newfd)) < 0) {
+    fwrite("Error with I/O redirection", 1, 27, stderr);
+    exit(EXIT_FAILURE);
+  }
+  return result;
+}
+/* End POSIX wrapper functions */
 
 /**
  * @brief The shell's main routine
@@ -202,11 +282,14 @@ int main(int argc, char **argv) {
  * each child process must have a unique process group ID so that our
  * background children don't receive SIGINT (SIGTSTP) from the kernel
  * when we type ctrl-c (ctrl-z) at the keyboard.
- * @param cmdline
+ * @param cmdline Raw command line string
  */
 void eval(char *cmdline) {
   int bg; /* should the job run in bg or fg? */
   struct cmdline_tokens tok;
+  int input_fd = STDIN_FILENO, output_fd = STDOUT_FILENO;
+  pid_t pid;  ///< PID of job
+  int state;  ///< State of job, BG or FG
 
   /* Parse command line */
   bg = parseline(cmdline, &tok);
@@ -215,33 +298,295 @@ void eval(char *cmdline) {
     return;
   if (tok.argv[0] == NULL) /* ignore empty lines */
     return;
+  Sigemptyset(&mask);
+  Sigaddset(&mask, SIGCHLD);
+  Sigaddset(&mask, SIGINT);
+  Sigaddset(&mask, SIGTSTP);
+  Sigprocmask(SIG_BLOCK, &mask, &prev_mask);
+  if (builtin_command(&tok, &input_fd, &output_fd, bg, cmdline)) {
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    return;
+  }
+  if ((pid = Fork()) == 0) {
+    // Child process
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    Setpgid(0, 0);
+    if (input_fd != STDIN_FILENO) {
+      Dup2(input_fd, STDIN_FILENO);
+      close(input_fd);
+    }
+    if (output_fd != STDOUT_FILENO) {
+      Dup2(output_fd, STDOUT_FILENO);
+      close(output_fd);
+    }
+    Signal(SIGTTIN, SIG_DFL);
+    Signal(SIGTTOU, SIG_DFL);
+    if (execve(tok.argv[0], tok.argv, environ) < 0) {
+      printf("%s: Command not found\n", tok.argv[0]);
+      exit(EXIT_SUCCESS);
+    }
+  } else {
+    // Parent process
+    state = bg ? BG : FG;
+    addjob(job_list, pid, state, cmdline);
+    if (bg) {
+      printf("[%d] (%d) %s\n", pid2jid(pid), pid, cmdline);
+    } else {
+      waitfg(pid, STDOUT_FILENO);
+    }
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    if (input_fd != STDIN_FILENO) close(input_fd);
+    if (output_fd != STDOUT_FILENO) close(output_fd);
+  }
+}
 
+/**
+ * @brief Check if @c tok is builtin command.
+ * If @c tok is builtin command, execute it and return @c true ;
+ * else return @c false while pass back @c input_fd and @c output_fd .
+ * @param tok Command line tokens
+ * @param p_input_fd Passed back @c input_fd
+ * @param p_output_fd Passed back @c output_fd
+ * @param bg Whether background executing
+ * @param cmdline Raw command line string
+ * @return true Builtin command executed. (Successful or not)
+ * @return false Not a builtin command.
+ */
+bool builtin_command(struct cmdline_tokens *tok, int *p_input_fd,
+                     int *p_output_fd, int bg, const char *cmdline) {
+  int input_fd = STDIN_FILENO, output_fd = STDOUT_FILENO;
+  if (tok->infile && (input_fd = open(tok->infile, O_RDONLY), input_fd < 0)) {
+    fprintf(stderr, "Error: %s No such file or directory\n", tok->infile);
+    return true;
+  }
+  if (tok->outfile &&
+      (output_fd = open(tok->outfile, O_TRUNC | O_CREAT | O_WRONLY),
+       output_fd < 0)) {
+    fprintf(stderr, "Error: %s Couldn't open file\n", tok->outfile);
+    return true;
+  }
+  switch (tok->builtins) {
+    case BUILTIN_QUIT:
+      fflush(stdout);
+      fflush(stderr);
+      exit(EXIT_SUCCESS);
+    case BUILTIN_JOBS:
+      listjobs(job_list, output_fd);
+      close_files(input_fd, output_fd);
+      return true;
+    case BUILTIN_BG:
+    case BUILTIN_FG:
+      do_bgfg(tok->argv, output_fd);
+      close_files(input_fd, output_fd);
+      return true;
+    case BUILTIN_KILL:
+      kill_job(tok->argv, output_fd);
+      close_files(input_fd, output_fd);
+      return true;
+    case BUILTIN_NOHUP:
+      nohup_eval(tok, input_fd, output_fd, bg, cmdline);
+      close_files(input_fd, output_fd);
+      return true;
+    default:
+      *p_input_fd = input_fd;
+      *p_output_fd = output_fd;
+      return false;
+  }
+}
+
+/**
+ * @brief Close file associated with given fd
+ * Won't close stdin and/or stdout
+ * @param input_fd Input file descriptor
+ * @param output_fd Output file descriptor
+ */
+void close_files(int input_fd, int output_fd) {
+  if (input_fd != STDIN_FILENO && close(input_fd) < 0) {
+    unix_error("close (close_files) error");
+  }
+  if (output_fd != STDOUT_FILENO && close(output_fd) < 0) {
+    unix_error("close (close_files) error");
+  }
+}
+
+/**
+ * @brief Execute @c bg or @c fg builtin command
+ * 
+ * @param argv Arguments passed by
+ * @param output_fd Where write output
+ */
+void do_bgfg(char **argv, int output_fd) {
+  char s[1060];
+  int pid, jid;
+  struct job_t *target_job;
+  if (!argv[1]) {
+    memset(s, 0, sizeof(s));
+    sprintf(s, "%s command requires PID or %%jobid argument\n", argv[0]);
+    Write(output_fd, s, strlen(s));
+    return;
+  }
+  if (isdigit(argv[1][0])) {
+    pid = atoi(argv[1]);
+    target_job = getjobpid(job_list, pid);
+    if (!target_job) {
+      memset(s, 0, sizeof(s));
+      sprintf(s, "(%d): No such process\n", pid);
+      Write(output_fd, s, strlen(s));
+      return;
+    }
+  } else if (argv[1][0] == '%') {
+    jid = atoi(argv[1] + 1);
+    target_job = getjobjid(job_list, jid);
+    if (!target_job) {
+      memset(s, 0, sizeof(s));
+      sprintf(s, "%s: No such job\n", argv[1]);
+      Write(output_fd, s, strlen(s));
+      return;
+    }
+  } else {
+    memset(s, 0, sizeof(s));
+    sprintf(s, "%s: argument must be a PID or %%jobid\n", argv[0]);
+    Write(output_fd, s, strlen(s));
+    return;
+  }
+  if (!strcmp(argv[0], "bg")) {
+    if (kill(-target_job->pid, SIGCONT) < 0) unix_error("kill (bg) error");
+    memset(s, 0, sizeof(s));
+    sprintf(s, "[%d] (%d) %s\n", target_job->jid, target_job->pid,
+            target_job->cmdline);
+    Write(output_fd, s, strlen(s));
+  } else if (!strcmp(argv[0], "fg")) {
+    if (kill(-target_job->pid, SIGCONT) < 0) unix_error("kill (fg) error");
+    waitfg(target_job->pid, output_fd);
+  } else {
+    memset(s, 0, sizeof(s));
+    sprintf(s, "do_bgfg: Internal error\n");
+    Write(output_fd, s, strlen(s));
+  }
+}
+
+/**
+ * @brief Kill a job
+ * 
+ * @param argv Arguments passed by
+ * @param output_fd Where write output
+ */
+void kill_job(char **argv, int output_fd) {
+  int pid, jid;
+  struct job_t *target_job;
+  if (!argv[1]) {
+    memset(sbuf, 0, sizeof(sbuf));
+    sprintf(sbuf, "%s command requires PID or %%jobid argument\n", argv[0]);
+    Write(output_fd, sbuf, strlen(sbuf));
+    return;
+  }
+  if (isdigit(argv[1][0])) {
+    pid = atoi(argv[1]);
+    target_job = getjobpid(job_list, pid);
+    if (!target_job) {
+      memset(sbuf, 0, sizeof(sbuf));
+      sprintf(sbuf, "(%d): No such process\n", pid);
+      Write(output_fd, sbuf, strlen(sbuf));
+      return;
+    }
+  } else if (argv[1][0] == '%') {
+    jid = atoi(argv[1] + 1);
+    target_job = getjobjid(job_list, jid);
+    if (!target_job) {
+      memset(sbuf, 0, sizeof(sbuf));
+      sprintf(sbuf, "%s: No such job\n", argv[1]);
+      Write(output_fd, sbuf, strlen(sbuf));
+      return;
+    }
+  } else {
+    memset(sbuf, 0, sizeof(sbuf));
+    sprintf(sbuf, "%s: argument must be a PID or %%jobid\n", argv[0]);
+    Write(output_fd, sbuf, strlen(sbuf));
+    return;
+  }
+  if (kill(-target_job->pid, SIGTERM) < 0) unix_error("kill (kill) error");
   return;
 }
 
 /**
+ * @brief Eval a non-builtin-command with no SIGHUP response
+ * 
+ * @param tok Command line tokens
+ * @param input_fd Where read input
+ * @param output_fd Where write output
+ * @param bg Whether background executing
+ * @param cmdline Raw command line string
+ */
+void nohup_eval(struct cmdline_tokens *tok, int input_fd, int output_fd, int bg,
+                const char *cmdline) {
+  int state;
+  int pid;
+  if ((pid = Fork()) == 0) {
+    // Child process
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    Sigemptyset(&mask);
+    Sigaddset(&mask, SIGHUP);
+    Sigprocmask(SIG_BLOCK, &mask, NULL);
+    Setpgid(0, 0);
+    if (input_fd != STDIN_FILENO) {
+      Dup2(input_fd, STDIN_FILENO);
+      close(input_fd);
+    }
+    if (output_fd != STDOUT_FILENO) {
+      Dup2(output_fd, STDOUT_FILENO);
+      close(output_fd);
+    }
+    Signal(SIGTTIN, SIG_DFL);
+    Signal(SIGTTOU, SIG_DFL);
+    if (execve(tok->argv[1], &tok->argv[1], environ) < 0) {
+      printf("%s: Command not found\n", tok->argv[1]);
+      exit(EXIT_SUCCESS);
+    }
+  } else {
+    // Parent process
+    state = bg ? BG : FG;
+    addjob(job_list, pid, state, cmdline);
+    if (bg) {
+      printf("[%d] (%d) %s \n", pid2jid(pid), pid, cmdline);
+    } else {
+      waitfg(pid, STDOUT_FILENO);
+    }
+  }
+}
+
+/**
+ * @brief Wait until foreground job finished
+ * 
+ * @param pid Foreground job PID
+ * @param output_fd Where write output
+ */
+void waitfg(int pid, int output_fd) {
+  struct job_t *target_job;
+  target_job = getjobpid(job_list, pid);
+  while (pid == target_job->pid && target_job->state == FG)
+    sigsuspend(&prev_mask);
+  if (verbose) {
+    memset(sbuf, 0, sizeof(sbuf));
+    sprintf(sbuf, "waitfg: Process (%d) no longer the fg process\n", pid);
+    Write(output_fd, sbuf, strlen(sbuf));
+  }
+}
+
+/**
  * @brief Parse the command line and build the argv array.
- *
- * Parameters:
- *   cmdline:  The command line, in the form:
- *
+ * The string elements of tok (e.g., argv[], infile, outfile)
+ * are statically allocated inside parseline() and will be
+ * overwritten the next time this function is invoked.
+ * @param cmdline The command line, in the form:
  *                command [arguments...] [< infile] [> oufile] [&]
- *
- *   tok:      Pointer to a cmdline_tokens structure. The elements of this
- *             structure will be populated with the parsed tokens. Characters
- *             enclosed in single or double quotes are treated as a single
- *             argument.
- * Returns:
+ * @param tok Pointer to a cmdline_tokens structure. The elements of this
+ *            structure will be populated with the parsed tokens. Characters
+ *            enclosed in single or double quotes are treated as a single
+ *            argument.
+ * @return int
  *   1:        if the user has requested a BG job
  *   0:        if the user has requested a FG job
  *  -1:        if cmdline is incorrectly formatted
- *
- * Note:       The string elements of tok (e.g., argv[], infile, outfile)
- *             are statically allocated inside parseline() and will be
- *             overwritten the next time this function is invoked.
- * @param cmdline
- * @param tok
- * @return int
  */
 int parseline(const char *cmdline, struct cmdline_tokens *tok) {
   static char array[MAXLINE];        /* holds local copy of command line */
@@ -383,7 +728,55 @@ int parseline(const char *cmdline, struct cmdline_tokens *tok) {
  * for any other currently running children to terminate.
  * @param sig
  */
-void sigchld_handler(int sig) { return; }
+void sigchld_handler(int sig) {
+  int pid, jid;
+  int status;
+  sigset_t mask, prev_mask;
+  int prev_errno = errno;
+  struct job_t *target_job;
+  if (verbose) sio_puts("sigchld_handler: entering\n");
+  if (sigfillset(&mask) < 0) sio_error("sigfillset error in sigchld_handler\n");
+  if (sigprocmask(SIG_BLOCK, &mask, &prev_mask) < 0)
+    sio_error("sigprocmask error in sigchld_handler\n");
+  while (true) {
+    pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
+    if (pid <= 0) break;
+    if (WIFSTOPPED(status)) {
+      target_job = getjobpid(job_list, pid);
+      if (!target_job) {
+        sio_put("Lost track of (%d)\n", pid);
+        return;
+      }
+      target_job->state = ST;
+      sio_put("Job [%d] (%d) stopped by signal %d\n", pid2jid(pid), pid,
+              WSTOPSIG(status));
+    } else if (WIFSIGNALED(status)) {
+      jid = pid2jid(pid);
+      if (deletejob(job_list, pid) && verbose)
+        sio_put("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
+      sio_put("Job [%d] (%d) terminated by signal %d\n", jid, pid,
+              WTERMSIG(status));
+    } else if (WIFEXITED(status)) {
+      jid = pid2jid(pid);
+      if (deletejob(job_list, pid) && verbose)
+        sio_put("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
+      if (verbose)
+        sio_put("sigchld_handler: Job [%d] (%d) terminates OK (status %d)\n",
+                jid, pid, WEXITSTATUS(pid));
+    } else {
+      if (!WIFCONTINUED(status)) sio_error("waitpid_error");
+      target_job = getjobpid(job_list, pid);
+      if (!target_job) sio_put("Lost track of (%d)\n", pid);
+      if (target_job->state != FG) target_job->state = BG;
+    }
+  }
+  if (pid && (pid != -1 || errno != ECHILD))
+    sio_error("sigchld_handler wait error");
+  if (sigprocmask(SIG_SETMASK, &prev_mask, NULL) < 0)
+    sio_error("sigprocmask error in sigchld_handler\n");
+  if (verbose) sio_put("sigchld_handler: exiting\n");
+  errno = prev_errno;
+}
 
 /**
  * @brief
@@ -392,7 +785,24 @@ void sigchld_handler(int sig) { return; }
  * to the foreground job.
  * @param sig
  */
-void sigint_handler(int sig) { return; }
+void sigint_handler(int sig) {
+  int pid;
+  sigset_t mask, prev_mask;
+  int prev_errno = errno;
+  if (verbose) sio_put("sigint_handler: entering\n");
+  if (sigfillset(&mask) < 0) sio_error("sigfillset error in sigint_handler\n");
+  if (sigprocmask(SIG_BLOCK, &mask, &prev_mask) < 0)
+    sio_error("sigprocmask error in sigint_handler\n");
+  pid = fgpid(job_list);
+  if (pid > 0) {
+    if (kill(-pid, SIGINT) < 0) sio_error("kill (sigint) error");
+    if (verbose) sio_put("sigint_handler: Job (%d) killed\n", pid);
+  }
+  if (sigprocmask(SIG_SETMASK, &prev_mask, NULL) < 0)
+    sio_error("sigprocmask error in sigint_handler\n");
+  if (verbose) sio_put("sigint_handler: exiting\n");
+  errno = prev_errno;
+}
 
 /**
  * @brief
@@ -401,7 +811,25 @@ void sigint_handler(int sig) { return; }
  * foreground job by sending it a SIGTSTP.
  * @param sig
  */
-void sigtstp_handler(int sig) { return; }
+void sigtstp_handler(int sig) {
+  int pid;
+  sigset_t mask, prev_mask;
+  int prev_errno = errno;
+  if (verbose) sio_put("sigstp_handler: entering\n");
+  if (sigfillset(&mask) < 0) sio_error("sigfillset error in sigstp_handler\n");
+  if (sigprocmask(SIG_BLOCK, &mask, &prev_mask) < 0)
+    sio_error("sigprocmask error in sigstp_handler\n");
+  pid = fgpid(job_list);
+  if (pid > 0) {
+    if (kill(-pid, SIGTSTP) < 0) sio_error("kill (tstp) error");
+    if (verbose)
+      sio_put("sigstp_handler: Job [%d] (%d) stopped\n", pid2jid(pid), pid);
+  }
+  if (sigprocmask(SIG_SETMASK, &prev_mask, NULL) < 0)
+    sio_error("sigprocmask error in sigstp_handler\n");
+  if (verbose) sio_put("sigstp_handler: exiting\n");
+  errno = prev_errno;
+}
 
 /**
  * @brief
@@ -467,7 +895,7 @@ int maxjid(struct job_t *job_list) {
  * @param cmdline
  * @return int
  */
-int addjob(struct job_t *job_list, pid_t pid, int state, char *cmdline) {
+int addjob(struct job_t *job_list, pid_t pid, int state, const char *cmdline) {
   int i;
 
   if (pid < 1) return 0;
