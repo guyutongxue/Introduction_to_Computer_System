@@ -45,3 +45,16 @@ Extra files:
     - `Makefile`
     - `temp.s`
     - `temp.objdump`
+
+## CacheLab
+
+New files:
+- `csim.c`
+
+Edited files:
+- `trans.c`
+
+## ShellLab `tshlab`
+
+Edited files:
+- `tsh.c`
