@@ -13,6 +13,10 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#ifdef USE_READLINE
+#include <readline/history.h>
+#include <readline/readline.h>
+#endif
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -204,8 +208,12 @@ int Dup2(int oldfd, int newfd) {
  */
 int main(int argc, char **argv) {
   char c;
+#ifdef USE_READLINE
+  char *cmdline = NULL;
+#else
   char cmdline[MAXLINE]; /* cmdline for fgets */
-  int emit_prompt = 1;   /* emit prompt (default) */
+#endif
+  int emit_prompt = 1; /* emit prompt (default) */
 
   /* Redirect stderr to stdout (so that driver will get all output
    * on the pipe connected to stdout) */
@@ -245,28 +253,46 @@ int main(int argc, char **argv) {
 
   /* Execute the shell's read/eval loop */
   while (1) {
+#ifndef USE_READLINE
     if (emit_prompt) {
       printf("%s", prompt);
       fflush(stdout);
     }
-    if ((fgets(cmdline, MAXLINE, stdin) == NULL) && ferror(stdin))
+#endif
+    if ((
+#ifdef USE_READLINE
+            (cmdline = readline(emit_prompt ? "tsh> " : ""))
+#else
+            fgets(cmdline, MAXLINE, stdin)
+#endif
+            == NULL) &&
+        ferror(stdin))
       app_error("fgets error");
     if (feof(stdin)) {
       /* End of file (ctrl-d) */
       printf("\n");
       fflush(stdout);
       fflush(stderr);
+#ifdef USE_READLINE
+      free(cmdline);
+#endif
       exit(0);
     }
 
+#ifdef USE_READLINE
+    add_history(cmdline);
+#else
     /* Remove the trailing newline */
     cmdline[strlen(cmdline) - 1] = '\0';
-
+#endif
     /* Evaluate the command line */
     eval(cmdline);
 
     fflush(stdout);
     fflush(stdout);
+#ifdef USE_READLINE
+    free(cmdline);
+#endif
   }
 
   exit(0); /* control never reaches here */
@@ -413,7 +439,7 @@ void close_files(int input_fd, int output_fd) {
 
 /**
  * @brief Execute @c bg or @c fg builtin command
- * 
+ *
  * @param argv Arguments passed by
  * @param output_fd Where write output
  */
@@ -469,7 +495,7 @@ void do_bgfg(char **argv, int output_fd) {
 
 /**
  * @brief Kill a job
- * 
+ *
  * @param argv Arguments passed by
  * @param output_fd Where write output
  */
@@ -512,7 +538,7 @@ void kill_job(char **argv, int output_fd) {
 
 /**
  * @brief Eval a non-builtin-command with no SIGHUP response
- * 
+ *
  * @param tok Command line tokens
  * @param input_fd Where read input
  * @param output_fd Where write output
@@ -558,7 +584,7 @@ void nohup_eval(struct cmdline_tokens *tok, int input_fd, int output_fd, int bg,
 
 /**
  * @brief Wait until foreground job finished
- * 
+ *
  * @param pid Foreground job PID
  * @param output_fd Where write output
  */
