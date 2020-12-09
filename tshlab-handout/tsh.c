@@ -305,6 +305,8 @@ void eval(char *cmdline) {
   Sigprocmask(SIG_BLOCK, &mask, &prev_mask);
   if (builtin_command(&tok, &input_fd, &output_fd, bg, cmdline)) {
     Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    if (input_fd != STDIN_FILENO) close(input_fd);
+    if (output_fd != STDOUT_FILENO) close(output_fd);
     return;
   }
   if ((pid = Fork()) == 0) {
