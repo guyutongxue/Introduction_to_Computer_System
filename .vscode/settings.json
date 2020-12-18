@@ -15,5 +15,6 @@
   },
   "editor.rulers": [
     80
-  ]
+  ],
+  "editor.formatOnType": false
 }
