@@ -1,0 +1,19 @@
+{
+  "C_Cpp.default.intelliSenseMode": "gcc-x64",
+  "C_Cpp.default.compilerPath": "/usr/bin/g++",
+  "C_Cpp.default.cppStandard": "c++17",
+  "C_Cpp.default.cStandard": "gnu11",
+  "C_Cpp.default.compilerArgs": [
+    "-DDEBUG"
+  ],
+  "C_Cpp.clang_format_style": "{ BasedOnStyle: Google, ColumnLimit: 80, SortIncludes: false }",
+  "files.associations": {
+    "*.bf": "brainfuck",
+    "cstddef": "cpp",
+    "unistd.h": "c",
+    "cstdlib": "c"
+  },
+  "editor.rulers": [
+    80
+  ]
+}
