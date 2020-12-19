@@ -2,8 +2,8 @@
  * @file mm.c
  * @author Guyutongxue (1900012983@pku.edu.cn)
  * @brief Handin file of MallocLab
- * @version 0.1
- * @date 2020-12-18 ~ 12.19
+ * @version 0.2
+ * @date 2020-12-18 ~ 12-19
  * Implementation of @c malloc , @c free , @c realloc and @c calloc .
  * Based on Segregated fit lists, with:
  * - *First Free* policy of placement
