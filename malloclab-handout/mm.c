@@ -283,7 +283,6 @@ void mm_checkheap(int lineno) {}  // Shut up linker complaint.
  */
 static void* extend_heap(size_t words) {
   size_t ext_size = ((words % 2) ? (words + 1) : words) * WORD_SIZE;
-  // dbg_printf("ext size: %#lx", ext_size);
   if (ext_size < MIN_BLOCK_SIZE) ext_size = MIN_BLOCK_SIZE;
   char* bp;
   if ((bp = mem_sbrk(ext_size)) == ERRPTR) return NULL;
@@ -305,7 +304,6 @@ static void* coalesce(void* bp) {
   // WORD prev_alloc = GET_ALLOC(GET_FOOTER(GET_PREV_BLOCK(bp)));
   WORD prev_alloc = GET_BTAG(GET_HEADER(bp)) == BTAG_ALLOC;
   WORD next_alloc = GET_ALLOC(GET_HEADER(GET_NEXT_BLOCK(bp)));
-  // dbg_printf("%p, p: %u, n: %u", bp, prev_alloc, next_alloc);
   size_t size = GET_SIZE(GET_HEADER(bp));
   if (prev_alloc && next_alloc) {
     PUT_PACK(GET_FOOTER(bp), size, GET_BTAG(GET_HEADER(bp)), 0);
@@ -317,7 +315,6 @@ static void* coalesce(void* bp) {
     PUT_PACK(GET_FOOTER(bp), size, GET_BTAG(GET_HEADER(bp)), 0);
   } else if (!prev_alloc && next_alloc) {
     size_t prev_size = GET_SIZE(GET_HEADER(GET_PREV_BLOCK(bp)));
-    // dbg_printf(PACK_FMT, PACK_ARG(GET_HEADER(GET_PREV_BLOCK(bp))));
     size += prev_size;
     seglist_remove(GET_PREV_BLOCK(bp), prev_size);
     bp = GET_PREV_BLOCK(bp);
@@ -333,7 +330,6 @@ static void* coalesce(void* bp) {
     PUT_PACK(GET_HEADER(bp), size, BTAG_KEEP, 0);
     PUT_PACK(GET_FOOTER(bp), size, GET_BTAG(GET_HEADER(bp)), 0);
   }
-  // dbg_printf("%p, size %#lx", bp, size);
   seglist_insert(bp, size);
   CHECK_HEAP();
   return bp;
@@ -348,7 +344,6 @@ static void* coalesce(void* bp) {
 static void* find_fit(size_t size) {
   size_t index = seglist_get_index(size);
   void* fp = NULL;
-  // find next seglist if previous not found
   for (; index < SEGLIST_SIZE && (fp = seglist_find(index, size)) == NULL;
        index++)
     ;
@@ -362,8 +357,6 @@ static void* find_fit(size_t size) {
  * @param alloc_size Allocated size
  */
 static void place(void* ptr, size_t alloc_size) {
-  // dbg_printf("heap (%p:%p) cur %p size %#lx", heap_begin, mem_heap_hi(), ptr,
-  //            alloc_size);
   size_t free_size = GET_SIZE(GET_HEADER(ptr));
   seglist_remove(ptr, free_size);
   ptrdiff_t diff = free_size - alloc_size;
@@ -440,7 +433,6 @@ static void seglist_remove(void* fp, size_t size) {
   size_t index = seglist_get_index(size);
   char* next = GET_NEXT_FREE(fp);
   char* prev = GET_PREV_FREE(fp);
-  // dbg_printf("next %p, prev %p", next, prev);
   if (prev) {
     GET_NEXT_FREE(prev) = next;
   } else {
@@ -472,23 +464,27 @@ static void* seglist_find(size_t index, size_t size) {
 
 // Begin debug (Heap Checker) functions
 
-/*
- * Return whether the pointer is in the heap.
- * May be useful for debugging.
+/**
+ * @brief Determine whether the pointer is in the heap.
+ * 
+ * @param p The pointer
+ * @return Whether @c p is in the heap
  */
 static int in_heap(const void* p) {
   return p <= mem_heap_hi() && p >= mem_heap_lo();
 }
 
-/*
- * Return whether the pointer is aligned.
- * May be useful for debugging.
+/**
+ * @brief Determine whether the pointer is aligned with ALIGNMENT
+ * 
+ * @param p The pointer
+ * @return Whether @c p is aligned
  */
 static int aligned(const void* p) { return (size_t)ALIGN(p) == (size_t)p; }
 
 /**
  * @brief Heap consistency checker
- * Scans the heap and checks it for correctness, call it by @c CHECK_HEAP  
+ * Scans the heap and checks it for correctness, call it by @c CHECK_HEAP
  * **For Teacher Assistants / Instructors**
  *   I use this function instead of default @c mm_checkheap
  *   because I prefer passing @c __func__ than @c __LINE__ .
@@ -535,6 +531,11 @@ void my_checkheap(const char* func, int lineno) {
     if (!in_heap(bp)) {
       ch_printf("Block %p not in heap (%p:%p): ", bp, mem_heap_hi(),
                 mem_heap_lo());
+      ch_printf("Header: " PACK_FMT, PACK_ARG(GET_HEADER(bp)));
+      exit(EXIT_FAILURE);
+    }
+    if (!aligned(bp)) {
+      ch_printf("Block %p not aligned", bp);
       ch_printf("Header: " PACK_FMT, PACK_ARG(GET_HEADER(bp)));
       exit(EXIT_FAILURE);
     }
@@ -590,7 +591,29 @@ void my_checkheap(const char* func, int lineno) {
   }
   for (bp = heap_begin; bp != heap_end; bp = GET_NEXT_BLOCK(bp)) {
     if (!GET_ALLOC(GET_HEADER(bp))) {
-
+      if (GET_NEXT_FREE(bp) && !in_heap(GET_NEXT_FREE(bp))) {
+        ch_printf("Free block %p 's next (%p) is not in heap.", bp,
+                  GET_NEXT_FREE(bp));
+        exit(EXIT_FAILURE);
+      }
+      if (GET_PREV_FREE(bp) && !in_heap(GET_PREV_FREE(bp))) {
+        ch_printf("Free block %p 's prev (%p) is not in heap.", bp,
+                  GET_PREV_FREE(bp));
+        exit(EXIT_FAILURE);
+      }
+    }
+  }
+  for (int i = 0; i < SEGLIST_SIZE; i++) {
+    void* bp = seglist[i];
+    while (bp) {
+      bp = GET_NEXT_FREE(bp);
+      if (bp && GET_NEXT_FREE(GET_PREV_FREE(bp)) != bp) {
+        ch_printf("Mistaken linking between free blocks: ");
+        ch_printf("bp            : %p", bp);
+        ch_printf("bp->prev      : %p", GET_PREV_FREE(bp));
+        ch_printf("bp->prev->next: %p", GET_NEXT_FREE(GET_PREV_FREE(bp)));
+        exit(EXIT_FAILURE);
+      }
     }
   }
 #undef ch_printf
