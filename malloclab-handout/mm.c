@@ -32,16 +32,19 @@
 #error You should compile this file with flag -std=gnu99.
 #endif
 
+#define CHECK_HEAP() my_checkheap(__func__, __LINE__)
+
+#define PACK_FMT "(%#x, %s, %s)"
+#define PACK_ARG(p) \
+  GET_SIZE(p), GET_BTAG(p) ? "ALLOC" : "FREE", GET_ALLOC(p) ? "ALLOC" : "FREE"
+
 // DEBUG defined in Makefile
 #ifdef DEBUG
 #define dbg_printf(FORMAT, ...) \
-  printf("%s(%d): " FORMAT, __func__, __LINE__, ##__VA_ARGS__)
+  printf("%s(%d): " FORMAT "\n", __func__, __LINE__, ##__VA_ARGS__)
 #else
 #define dbg_printf(...)
 #endif
-
-// Check heap
-#define MM_CHECKHEAP checkheap(__func__, __LINE__)
 
 /* do not change the following! */
 #ifdef DRIVER
@@ -99,8 +102,6 @@ typedef uint64_t DWORD;  ///< DWORD (double WORD) is 64-bit
 #define INIT_SIZE (1 << 6)    ///< Initial heap size
 #define CHUNK_SIZE (1 << 12)  ///< Extend heap by this amount
 
-#define CHECK_HEAP() mm_checkheap_alter(__func__, __LINE__)
-
 /// Get the greater value of @c x and @c y
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 /// Get the less value of @c x and @c y
@@ -122,9 +123,9 @@ typedef uint64_t DWORD;  ///< DWORD (double WORD) is 64-bit
 #define GET_BTAG(p) (GET_WORD(p) & 0x2)
 
 /// btag enums
-#define BTAG_KEEP (-1)  ///< Keep btag as original
-#define BTAG_ALLOC 0x2  /// Set btag to Allocated
-#define BTAG_FREE 0x0   /// set btag to Freed
+#define BTAG_KEEP ((WORD)(-1))  ///< Keep btag as original
+#define BTAG_ALLOC 0x2          /// Set btag to Allocated
+#define BTAG_FREE 0x0           /// set btag to Freed
 /// Put Pack( @c size , @c btag , @c alloc ) to @c WORD located at @c p
 #define PUT_PACK(p, size, btag, alloc)                                 \
   ((btag) == BTAG_KEEP ? PUT_WORD((p), (size) | (alloc) | GET_BTAG(p)) \
@@ -138,7 +139,7 @@ typedef uint64_t DWORD;  ///< DWORD (double WORD) is 64-bit
 
 #define GET_NEXT_BLOCK(bp) ((void*)((char*)(bp) + GET_SIZE(GET_HEADER(bp))))
 #define GET_PREV_BLOCK(bp) \
-  ((void*)((char*)(bp) + GET_SIZE((char*)(bp)-DWORD_SIZE)))
+  ((void*)((char*)(bp)-GET_SIZE((char*)(bp)-DWORD_SIZE)))
 
 #define GET_NEXT_FREE(bp) (*(void**)(bp))
 #define GET_PREV_FREE(bp) (*((void**)(bp) + 1))
@@ -155,7 +156,7 @@ static void* coalesce(void*);
 static void* find_fit(size_t);
 static void place(void*, size_t);
 
-void mm_checkheap_alter(const char*, int);
+void my_checkheap(const char*, int);
 
 static size_t seglist_get_index(size_t);
 static void seglist_insert(void*, size_t);
@@ -182,7 +183,8 @@ int mm_init(void) {
   // prologue footer
   PUT_PACK(heap_begin + 2 * WORD_SIZE, DWORD_SIZE, BTAG_FREE, 1);
   // epilogue header
-  PUT_PACK(heap_begin + 3 * WORD_SIZE, WORD_SIZE, BTAG_FREE, 1);
+  PUT_PACK(heap_begin + 3 * WORD_SIZE, 0, BTAG_ALLOC, 1);
+  heap_begin += DWORD_SIZE;
   if (extend_heap(INIT_SIZE) == NULL) return -1;
   CHECK_HEAP();
   return 0;
@@ -206,8 +208,8 @@ void* malloc(size_t size) {
     place(bp, allocated_size);
     return bp;
   }
-  size_t extended_size = MAX(allocated_size, CHUNK_SIZE);
-  if ((bp = extend_heap(extended_size / WORD_SIZE))) {
+  size_t ext_size = MAX(allocated_size, CHUNK_SIZE);
+  if ((bp = extend_heap(ext_size / WORD_SIZE))) {
     place(bp, allocated_size);
     return bp;
   }
@@ -267,75 +269,6 @@ void* calloc(size_t nmemb, size_t size) {
   return bp;
 }
 
-/*
- * Return whether the pointer is in the heap.
- * May be useful for debugging.
- */
-static int in_heap(const void* p) {
-  return p <= mem_heap_hi() && p >= mem_heap_lo();
-}
-
-/*
- * Return whether the pointer is aligned.
- * May be useful for debugging.
- */
-static int aligned(const void* p) { return (size_t)ALIGN(p) == (size_t)p; }
-
-/**
- * @brief Heap consistency checker
- * Scans the heap and checks it for correctness
- * @param func Pass __func__ into it for debugging
- * @param lineno Pass __LINE__ macro into it for debugging
- */
-void mm_checkheap_alter(const char* func, int lineno) {
-#define ch_printf(FORMAT, ...) \
-  dbg_printf("%s(%d): " FORMAT, func, lineno, ##__VA_ARGS__)
-  void* bp;
-  void* header;
-  void* footer;
-  void* heap_end = (char*)mem_heap_hi() + 1;
-  if ((heap_begin - (char*)(mem_heap_lo())) != SEGLIST_SIZE * DWORD_SIZE) {
-    ch_printf("Seglist pointers don't have enough space.\n");
-  }
-  // Prologue checking
-  bp = heap_begin;
-  header = GET_HEADER(bp);
-  footer = GET_FOOTER(bp);
-  if (GET_SIZE(header) != DWORD_SIZE || GET_ALLOC(header) != 1) {
-    ch_printf("Prologue block smashed: wrong size\n");
-    ch_printf("Prologue SIZE: %d\n", GET_SIZE(header));
-    ch_printf("Prologue ALLOC: %d\n", GET_ALLOC(header));
-    exit(EXIT_FAILURE);
-  }
-  if (GET_SIZE(header) != GET_SIZE(footer) ||
-      GET_ALLOC(header) != GET_ALLOC(footer)) {
-    ch_printf("Prologue block smashed: mismatched h/f\n");
-    ch_printf("Prologue header: (%d, %d)", GET_SIZE(header), GET_ALLOC(header));
-    ch_printf("Prologue footer: (%d, %d)", GET_SIZE(footer), GET_ALLOC(footer));
-    exit(EXIT_FAILURE);
-  }
-  // Epilogue checking
-  bp = heap_end;
-  header = GET_HEADER(bp);
-  footer = GET_FOOTER(bp);
-  if (GET_SIZE(header) != WORD_SIZE || GET_ALLOC(header) != 1) {
-    ch_printf("Epilogue block smashed: wrong size\n");
-    ch_printf("Epilogue SIZE: %d\n", GET_SIZE(header));
-    ch_printf("Epilogue ALLOC: %d\n", GET_ALLOC(header));
-    exit(EXIT_FAILURE);
-  }
-  // Alignment checking
-  for (bp = heap_begin; bp != heap_end; bp = GET_NEXT_BLOCK(bp)) {
-    if (!in_heap(bp)) {
-      ch_printf("Block %p not in heap (%p:%p)", bp, mem_heap_hi(), mem_heap_lo());
-      exit(EXIT_FAILURE);
-    }
-  }
-  // H/f checking
-
-#undef ch_printf
-}
-
 void mm_checkheap(int lineno) {}  // Shut up linker complaint.
 
 // Helper function definitions
@@ -348,13 +281,15 @@ void mm_checkheap(int lineno) {}  // Shut up linker complaint.
  */
 static void* extend_heap(size_t words) {
   size_t ext_size = ((words % 2) ? (words + 1) : words) * WORD_SIZE;
+  // dbg_printf("ext size: %#lx", ext_size);
   if (ext_size < MIN_BLOCK_SIZE) ext_size = MIN_BLOCK_SIZE;
   char* bp;
   if ((bp = mem_sbrk(ext_size)) == ERRPTR) return NULL;
-  PUT_PACK(GET_HEADER(bp), ext_size, BTAG_FREE, 0);
-  PUT_PACK(GET_FOOTER(bp), ext_size, BTAG_FREE, 0);
-  // dummy header
-  PUT_PACK(GET_HEADER(GET_NEXT_BLOCK(bp)), WORD_SIZE, BTAG_FREE, 0);
+  PUT_PACK(GET_HEADER(bp), ext_size, BTAG_KEEP, 0);
+  PUT_PACK(GET_FOOTER(bp), ext_size, GET_BTAG(GET_HEADER(bp)), 0);
+  // epilogue header
+  PUT_PACK(GET_HEADER(GET_NEXT_BLOCK(bp)), WORD_SIZE, BTAG_FREE, 1);
+  PUT_FREE_BTAG(GET_HEADER(GET_NEXT_BLOCK(bp)));
   return coalesce(bp);
 }
 
@@ -368,22 +303,24 @@ static void* coalesce(void* bp) {
   // WORD prev_alloc = GET_ALLOC(GET_FOOTER(GET_PREV_BLOCK(bp)));
   WORD prev_alloc = GET_BTAG(GET_HEADER(bp)) == BTAG_ALLOC;
   WORD next_alloc = GET_ALLOC(GET_HEADER(GET_NEXT_BLOCK(bp)));
+  // dbg_printf("%p, p: %u, n: %u", bp, prev_alloc, next_alloc);
   size_t size = GET_SIZE(GET_HEADER(bp));
   if (prev_alloc && next_alloc) {
-    (void)bp;
+    PUT_PACK(GET_FOOTER(bp), size, GET_BTAG(GET_HEADER(bp)), 0);
   } else if (prev_alloc && !next_alloc) {
     size_t next_size = GET_SIZE(GET_HEADER(GET_NEXT_BLOCK(bp)));
     size += next_size;
     seglist_remove(GET_NEXT_BLOCK(bp), next_size);
     PUT_PACK(GET_HEADER(bp), size, BTAG_KEEP, 0);
-    PUT_PACK(GET_FOOTER(bp), size, BTAG_KEEP, 0);
+    PUT_PACK(GET_FOOTER(bp), size, GET_BTAG(GET_HEADER(bp)), 0);
   } else if (!prev_alloc && next_alloc) {
     size_t prev_size = GET_SIZE(GET_HEADER(GET_PREV_BLOCK(bp)));
+    // dbg_printf(PACK_FMT, PACK_ARG(GET_HEADER(GET_PREV_BLOCK(bp))));
     size += prev_size;
     seglist_remove(GET_PREV_BLOCK(bp), prev_size);
     bp = GET_PREV_BLOCK(bp);
     PUT_PACK(GET_HEADER(bp), size, BTAG_KEEP, 0);
-    PUT_PACK(GET_FOOTER(bp), size, BTAG_KEEP, 0);
+    PUT_PACK(GET_FOOTER(bp), size, GET_BTAG(GET_HEADER(bp)), 0);
   } else {
     size_t next_size = GET_SIZE(GET_HEADER(GET_NEXT_BLOCK(bp)));
     size_t prev_size = GET_SIZE(GET_HEADER(GET_PREV_BLOCK(bp)));
@@ -392,9 +329,11 @@ static void* coalesce(void* bp) {
     seglist_remove(GET_PREV_BLOCK(bp), prev_size);
     bp = GET_PREV_BLOCK(bp);
     PUT_PACK(GET_HEADER(bp), size, BTAG_KEEP, 0);
-    PUT_PACK(GET_HEADER(bp), size, BTAG_KEEP, 0);
+    PUT_PACK(GET_FOOTER(bp), size, GET_BTAG(GET_HEADER(bp)), 0);
   }
+  // dbg_printf("%p, size %#lx", bp, size);
   seglist_insert(bp, size);
+  CHECK_HEAP();
   return bp;
 }
 
@@ -421,6 +360,8 @@ static void* find_fit(size_t size) {
  * @param alloc_size Allocated size
  */
 static void place(void* ptr, size_t alloc_size) {
+  // dbg_printf("heap (%p:%p) cur %p size %#lx", heap_begin, mem_heap_hi(), ptr,
+  //            alloc_size);
   size_t free_size = GET_SIZE(GET_HEADER(ptr));
   seglist_remove(ptr, free_size);
   ptrdiff_t diff = free_size - alloc_size;
@@ -431,11 +372,13 @@ static void place(void* ptr, size_t alloc_size) {
     PUT_PACK(GET_FOOTER(bp), diff, BTAG_ALLOC, 0);
     seglist_insert(bp, diff);
   } else {
-    PUT_PACK(GET_HEADER(ptr), alloc_size, BTAG_KEEP, 1);
+    PUT_PACK(GET_HEADER(ptr), free_size, BTAG_KEEP, 1);
+    PUT_ALLOC_BTAG(GET_HEADER(GET_NEXT_BLOCK(ptr)));
   }
+  CHECK_HEAP();
 }
 
-// Begin seglist helper function
+// Begin seglist helper functions
 
 /**
  * @brief Determine which seglist to use base on @c size
@@ -495,6 +438,7 @@ static void seglist_remove(void* fp, size_t size) {
   size_t index = seglist_get_index(size);
   char* next = GET_NEXT_FREE(fp);
   char* prev = GET_PREV_FREE(fp);
+  // dbg_printf("next %p, prev %p", next, prev);
   if (prev) {
     GET_NEXT_FREE(prev) = next;
   } else {
@@ -515,7 +459,6 @@ static void seglist_remove(void* fp, size_t size) {
 static void* seglist_find(size_t index, size_t size) {
   if (index == SEGLIST_AUTO) index = seglist_get_index(size);
   void* fp = seglist[index];
-  // dbg_printf("List start address %p", fp);
   while (fp) {
     if (size <= GET_SIZE(GET_HEADER(fp))) return fp;
     fp = GET_NEXT_FREE(fp);
@@ -523,4 +466,120 @@ static void* seglist_find(size_t index, size_t size) {
   return NULL;
 }
 
-// End seglist helper function
+// End seglist helper functions
+
+// Begin debug (Heap Checker) functions
+
+/*
+ * Return whether the pointer is in the heap.
+ * May be useful for debugging.
+ */
+static int in_heap(const void* p) {
+  return p <= mem_heap_hi() && p >= mem_heap_lo();
+}
+
+/*
+ * Return whether the pointer is aligned.
+ * May be useful for debugging.
+ */
+static int aligned(const void* p) { return (size_t)ALIGN(p) == (size_t)p; }
+
+/**
+ * @brief Heap consistency checker
+ * Scans the heap and checks it for correctness, call it by @c CHECK_HEAP  
+ * **For Teacher Assistants / Instructors**
+ *   I use this function instead of default @c mm_checkheap
+ *   because I prefer passing @c __func__ than @c __LINE__ .
+ * @param func Pass @c __func__ into it for debugging
+ * @param lineno Pass @c __LINE__ macro into it for debugging
+ */
+void my_checkheap(const char* func, int lineno) {
+#define ch_printf(FORMAT, ...) \
+  dbg_printf("%s(%d): " FORMAT, func, lineno, ##__VA_ARGS__)
+  void* bp;
+  void* header;
+  void* footer;
+  void* heap_end = (char*)mem_heap_hi() + 1;
+  void* prev;
+  if ((heap_begin - DWORD_SIZE - (char*)(mem_heap_lo())) !=
+      SEGLIST_SIZE * DWORD_SIZE) {
+    ch_printf("Seglist pointers don't have enough space.");
+  }
+  // Prologue checking
+  bp = heap_begin;
+  header = GET_HEADER(bp);
+  footer = GET_FOOTER(bp);
+  if (GET_SIZE(header) != DWORD_SIZE || GET_ALLOC(header) != 1) {
+    ch_printf("Prologue block smashed: wrong size (header)");
+    ch_printf("Prologue header: " PACK_FMT, PACK_ARG(header));
+    exit(EXIT_FAILURE);
+  }
+  if (GET_SIZE(footer) != DWORD_SIZE || GET_ALLOC(footer) != 1) {
+    ch_printf("Prologue block smashed: wrong size (footer)");
+    ch_printf("Prologue footer: " PACK_FMT, PACK_ARG(footer));
+    exit(EXIT_FAILURE);
+  }
+  // Epilogue checking
+  bp = heap_end;
+  header = GET_HEADER(bp);
+  footer = GET_FOOTER(bp);
+  if (GET_SIZE(header) != 0 || GET_ALLOC(header) != 1) {
+    ch_printf("Epilogue block smashed: wrong size");
+    ch_printf("Epilogue header: " PACK_FMT, PACK_ARG(header));
+    exit(EXIT_FAILURE);
+  }
+  // Alignment checking
+  for (bp = heap_begin; bp != heap_end; bp = GET_NEXT_BLOCK(bp)) {
+    if (!in_heap(bp)) {
+      ch_printf("Block %p not in heap (%p:%p): ", bp, mem_heap_hi(),
+                mem_heap_lo());
+      ch_printf("Header: " PACK_FMT, PACK_ARG(GET_HEADER(bp)));
+      exit(EXIT_FAILURE);
+    }
+  }
+  // H/F checking
+  prev = heap_begin;
+  for (bp = GET_NEXT_BLOCK(heap_begin); bp != heap_end;
+       prev = bp, bp = GET_NEXT_BLOCK(bp)) {
+    header = GET_HEADER(bp);
+    if (!GET_ALLOC(header)) {
+      // free block
+      footer = GET_FOOTER(bp);
+      if (GET_SIZE(header) != GET_SIZE(footer) ||
+          GET_ALLOC(header) != GET_ALLOC(footer) ||
+          GET_BTAG(header) != GET_BTAG(footer)) {
+        ch_printf("Block %p H/F mismatch:", bp);
+        ch_printf("Header: " PACK_FMT, PACK_ARG(header));
+        ch_printf("Footer: " PACK_FMT, PACK_ARG(footer));
+        exit(EXIT_FAILURE);
+      }
+    }
+    if (GET_SIZE(header) < MIN_BLOCK_SIZE) {
+      ch_printf("Block %p too small: ", bp);
+      ch_printf("Header: " PACK_FMT, PACK_ARG(header));
+      exit(EXIT_FAILURE);
+    }
+    if (!!GET_BTAG(header) != GET_ALLOC(GET_HEADER(prev))) {
+      ch_printf("BTAG of block %p doesn't match previous block ALLOC:", bp);
+      ch_printf("Current(%p) header: " PACK_FMT, bp, PACK_ARG(GET_HEADER(bp)));
+      ch_printf("Previous(%p) header: " PACK_FMT, prev,
+                PACK_ARG(GET_HEADER(prev)));
+      exit(EXIT_FAILURE);
+    }
+  }
+  // Coalescing checking
+  prev = heap_begin;
+  for (bp = GET_NEXT_BLOCK(heap_begin); bp != heap_end;
+       prev = bp, bp = GET_NEXT_BLOCK(bp)) {
+    if (!GET_ALLOC(GET_HEADER(prev)) && !GET_ALLOC(GET_HEADER(bp))) {
+      ch_printf("Adjacent free block %p and %p", prev, bp);
+      ch_printf("%p header: " PACK_FMT, prev, PACK_ARG(GET_HEADER(prev)));
+      ch_printf("%p header: " PACK_FMT, bp, PACK_ARG(GET_HEADER(prev)));
+      exit(EXIT_FAILURE);
+    }
+  }
+  // Seglist checking
+#undef ch_printf
+}
+
+// End debug functions
