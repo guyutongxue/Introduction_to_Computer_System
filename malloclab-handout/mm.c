@@ -34,6 +34,7 @@
 
 #define CHECK_HEAP() my_checkheap(__func__, __LINE__)
 
+// Header/footer printing macros
 #define PACK_FMT "(%#x, %s, %s)"
 #define PACK_ARG(p) \
   GET_SIZE(p), GET_BTAG(p) ? "ALLOC" : "FREE", GET_ALLOC(p) ? "ALLOC" : "FREE"
@@ -117,15 +118,15 @@ typedef uint64_t DWORD;  ///< DWORD (double WORD) is 64-bit
 
 /// Get @c size from a @c WORD
 #define GET_SIZE(p) (GET_WORD(p) & ~0x7)
-/// Get @c alloc from a @c WORD
-#define GET_ALLOC(p) (GET_WORD(p) & 0x1)
 /// Get Boundary tag from a @c WORD
 #define GET_BTAG(p) (GET_WORD(p) & 0x2)
+/// Get @c alloc from a @c WORD
+#define GET_ALLOC(p) (GET_WORD(p) & 0x1)
 
 /// btag enums
 #define BTAG_KEEP ((WORD)(-1))  ///< Keep btag as original
-#define BTAG_ALLOC 0x2          /// Set btag to Allocated
-#define BTAG_FREE 0x0           /// set btag to Freed
+#define BTAG_ALLOC 0x2          ///< Set btag to Allocated
+#define BTAG_FREE 0x0           ///< set btag to Freed
 /// Put Pack( @c size , @c btag , @c alloc ) to @c WORD located at @c p
 #define PUT_PACK(p, size, btag, alloc)                                 \
   ((btag) == BTAG_KEEP ? PUT_WORD((p), (size) | (alloc) | GET_BTAG(p)) \
@@ -579,6 +580,18 @@ void my_checkheap(const char* func, int lineno) {
     }
   }
   // Seglist checking
+  for (int i = 0; i < SEGLIST_SIZE; i++) {
+    bp = seglist[i];
+    if (bp && !in_heap(bp)) {
+      ch_printf("seglist[%d] (%p) head not in heap.", i, bp);
+      exit(EXIT_FAILURE);
+    }
+  }
+  for (bp = heap_begin; bp != heap_end; bp = GET_NEXT_BLOCK(bp)) {
+    if (!GET_ALLOC(GET_HEADER(bp))) {
+
+    }
+  }
 #undef ch_printf
 }
 
