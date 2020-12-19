@@ -3,7 +3,7 @@
  * @author Guyutongxue (1900012983@pku.edu.cn)
  * @brief Handin file of MallocLab
  * @version 0.1
- * @date 2020-12-18 ~
+ * @date 2020-12-18 ~ 12.19
  * Implementation of @c malloc , @c free , @c realloc and @c calloc .
  * Based on Segregated fit lists, with:
  * - *First Free* policy of placement
@@ -32,8 +32,6 @@
 #error You should compile this file with flag -std=gnu99.
 #endif
 
-#define CHECK_HEAP() my_checkheap(__func__, __LINE__)
-
 // Header/footer printing macros
 #define PACK_FMT "(%#x, %s, %s)"
 #define PACK_ARG(p) \
@@ -43,8 +41,11 @@
 #ifdef DEBUG
 #define dbg_printf(FORMAT, ...) \
   printf("%s(%d): " FORMAT "\n", __func__, __LINE__, ##__VA_ARGS__)
+
+#define CHECK_HEAP() my_checkheap(__func__, __LINE__)
 #else
 #define dbg_printf(...)
+#define CHECK_HEAP()
 #endif
 
 /* do not change the following! */
