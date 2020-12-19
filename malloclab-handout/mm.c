@@ -37,7 +37,7 @@
 #define PACK_ARG(p) \
   GET_SIZE(p), GET_BTAG(p) ? "ALLOC" : "FREE", GET_ALLOC(p) ? "ALLOC" : "FREE"
 
-// DEBUG defined in Makefile
+// DEBUG may be defined in Makefile
 #ifdef DEBUG
 #define dbg_printf(FORMAT, ...) \
   printf("%s(%d): " FORMAT "\n", __func__, __LINE__, ##__VA_ARGS__)
@@ -79,16 +79,19 @@ typedef uint64_t DWORD;  ///< DWORD (double WORD) is 64-bit
  *          |
  *          bp (base pointer)
  *
- * Freed:
+ * Free:
  * +--------+-----------+-----------+-------+--------+
  * | HEADER | NEXT_FREE | PREV_FREE |  ...  | FOOTER |
  * +--------+-----------+-----------+-------+--------+
- *     4B   ^     8B          8B                4B
+ *     4B   ^     4B          4B                4B
  *          |
  *          bp (base pointer)
  *
- * MIN_PAYLOAD_SIZE == 20B
- * MIN_BLOCK_SIZE   == 24B
+ * MIN_PAYLOAD_SIZE == 12B
+ * MIN_BLOCK_SIZE   == 16B
+ * 
+ * *Optimization*
+ * NEXT_FREE & PREV_FREE records diff between pointer and heap_begin.
  *
  * HEADER & FOOTER:
  * +-------------------------------------+---+---+---+
@@ -99,8 +102,8 @@ typedef uint64_t DWORD;  ///< DWORD (double WORD) is 64-bit
  * B - Boundary tag
  *
  */
-#define MIN_PAYLOAD_SIZE 20   ///< Minimal payload alignment
-#define MIN_BLOCK_SIZE 24     ///< Minimal block size
+#define MIN_PAYLOAD_SIZE 12   ///< Minimal payload alignment
+#define MIN_BLOCK_SIZE 16     ///< Minimal block size
 #define INIT_SIZE (1 << 6)    ///< Initial heap size
 #define CHUNK_SIZE (1 << 12)  ///< Extend heap by this amount
 
@@ -128,6 +131,7 @@ typedef uint64_t DWORD;  ///< DWORD (double WORD) is 64-bit
 #define BTAG_KEEP ((WORD)(-1))  ///< Keep btag as original
 #define BTAG_ALLOC 0x2          ///< Set btag to Allocated
 #define BTAG_FREE 0x0           ///< set btag to Freed
+
 /// Put Pack( @c size , @c btag , @c alloc ) to @c WORD located at @c p
 #define PUT_PACK(p, size, btag, alloc)                                 \
   ((btag) == BTAG_KEEP ? PUT_WORD((p), (size) | (alloc) | GET_BTAG(p)) \
@@ -135,24 +139,47 @@ typedef uint64_t DWORD;  ///< DWORD (double WORD) is 64-bit
 #define PUT_ALLOC_BTAG(p) (GET_WORD(p) |= 0x2)
 #define PUT_FREE_BTAG(p) (GET_WORD(p) &= ~0x2)
 
+/// Get the address of header/footer of a block
 #define GET_HEADER(bp) ((void*)((char*)(bp)-WORD_SIZE))
 #define GET_FOOTER(bp) \
   ((void*)((char*)(bp) + GET_SIZE(GET_HEADER(bp)) - DWORD_SIZE))
 
+/// Get the @c bp of next/previous block
 #define GET_NEXT_BLOCK(bp) ((void*)((char*)(bp) + GET_SIZE(GET_HEADER(bp))))
 #define GET_PREV_BLOCK(bp) \
   ((void*)((char*)(bp)-GET_SIZE((char*)(bp)-DWORD_SIZE)))
 
-#define GET_NEXT_FREE(bp) (*(void**)(bp))
-#define GET_PREV_FREE(bp) (*((void**)(bp) + 1))
+/// Get the address of next/previous free block using seglist
+#define GET_NEXT_FREE(bp)          \
+  ({                               \
+    WORD val = GET_WORD(bp);       \
+    val ? val + heap_begin : NULL; \
+  })
+#define GET_PREV_FREE(bp)                         \
+  ({                                              \
+    WORD val = GET_WORD((char*)(bp) + WORD_SIZE); \
+    val ? val + heap_begin : NULL;                \
+  })
+#define SET_NEXT_FREE(bp, val) \
+  PUT_WORD((bp), (WORD)((val) ? ((char*)(val)-heap_begin) : 0))
+#define SET_PREV_FREE(bp, val)      \
+  PUT_WORD((char*)(bp) + WORD_SIZE, \
+           (WORD)((val) ? ((char*)(val)-heap_begin) : 0))
 
-#define SEGLIST_SIZE 10
+/// Automatic choose appropriate seglist index
 #define SEGLIST_AUTO ((size_t)-1)
 
+/// How many seglist
+#define SEGLIST_SIZE 17
+
+/// The begin position of available heap ( @c bp of prologue)
 static char* heap_begin = NULL;
+
+/// Array of seglists
 static void** seglist;
 
 // Helper function declarations
+
 static void* extend_heap(size_t);
 static void* coalesce(void*);
 static void* find_fit(size_t);
@@ -401,8 +428,22 @@ static size_t seglist_get_index(size_t size) {
       return 7;
     case 4097 ... 8192:
       return 8;
-    default:
+    case 8193 ... 16384:
       return 9;
+    case 16385 ... 32768:
+      return 10;
+    case 32769 ... 65536:
+      return 11;
+    case 65537 ... 131072:
+      return 12;
+    case 131073 ... 262144:
+      return 13;
+    case 262145 ... 524288:
+      return 14;
+    case 524289 ... 1048576:
+      return 15;
+    default:
+      return 16;
   }
 }
 
@@ -416,10 +457,10 @@ static void seglist_insert(void* fp, size_t size) {
   size_t index = seglist_get_index(size);
   char* insert_pt = seglist[index];
   if (insert_pt) {  // list not empty
-    GET_PREV_FREE(insert_pt) = fp;
+    SET_PREV_FREE(insert_pt, fp);
   }
-  GET_NEXT_FREE(fp) = insert_pt;
-  GET_PREV_FREE(fp) = NULL;
+  SET_NEXT_FREE(fp, insert_pt);
+  SET_PREV_FREE(fp, NULL);
   seglist[index] = fp;
 }
 
@@ -434,12 +475,12 @@ static void seglist_remove(void* fp, size_t size) {
   char* next = GET_NEXT_FREE(fp);
   char* prev = GET_PREV_FREE(fp);
   if (prev) {
-    GET_NEXT_FREE(prev) = next;
+    SET_NEXT_FREE(prev, next);
   } else {
     seglist[index] = next;
   }
   if (next) {
-    GET_PREV_FREE(next) = prev;
+    SET_PREV_FREE(next, prev);
   }
 }
 
@@ -466,7 +507,7 @@ static void* seglist_find(size_t index, size_t size) {
 
 /**
  * @brief Determine whether the pointer is in the heap.
- * 
+ *
  * @param p The pointer
  * @return Whether @c p is in the heap
  */
@@ -476,7 +517,7 @@ static int in_heap(const void* p) {
 
 /**
  * @brief Determine whether the pointer is aligned with ALIGNMENT
- * 
+ *
  * @param p The pointer
  * @return Whether @c p is aligned
  */
@@ -492,6 +533,7 @@ static int aligned(const void* p) { return (size_t)ALIGN(p) == (size_t)p; }
  * @param lineno Pass @c __LINE__ macro into it for debugging
  */
 void my_checkheap(const char* func, int lineno) {
+// Print original caller
 #define ch_printf(FORMAT, ...) \
   dbg_printf("%s(%d): " FORMAT, func, lineno, ##__VA_ARGS__)
   void* bp;
