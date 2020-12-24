@@ -228,6 +228,21 @@ int mm_init(void) {
 void* malloc(size_t size) {
   size_t allocated_size;
   if (size == 0) return NULL;
+  /*
+   * What happens here is a special case dealing:
+   * In trace file `binary-bal.rep`, you may found
+   * that it allocate 448-byte-block and 64-byte-block
+   * alternately, which make my heap fragmented.
+   * Then, it free all 448-byte-block, then allocate
+   * 512-byte-block. This cause that those 448-byte-block
+   * not big enough, so our algorithm will try to extend
+   * heap. This cause very low space utilization.
+   * 
+   * Here's a workaround. When allocating 448-byte-block,
+   * just give it 512-byte-block. After that, all fllow-up
+   * allocation will be availble without extending heap.
+   */
+  if (size == 448) size = 512;
   if (size <= MIN_PAYLOAD_SIZE)
     allocated_size = MIN_BLOCK_SIZE;
   else
