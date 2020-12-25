@@ -8,17 +8,19 @@
 CC = gcc
 CPPC = g++
 CFLAGS = -g -Wall
-CPPFLAGS = -g -Wall -Wextra -Werror -std=c++17
-LDFLAGS = -lpthread
+CPPFLAGS = -g -Wall -Wextra -std=c++17
+LDFLAGS = -pthread
 
 .PHONY: all
 
 all: proxy
 
-csapp.o: csapp.c csapp.h
-	$(CC) $(CFLAGS) -c csapp.c
+# csapp.o: csapp.c csapp.h
+# 	$(CC) $(CFLAGS) -c csapp.c
+csapp.o: csapp2.cpp csapp2.h
+	$(CPPC) ${CPPFLAGS} -c csapp2.cpp -o csapp.o
 
-proxy.o: proxy.cpp csapp.h
+proxy.o: proxy.cpp csapp2.h
 	$(CPPC) $(CPPFLAGS) -c proxy.cpp
 
 proxy: proxy.o csapp.o

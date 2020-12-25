@@ -1,5 +1,13 @@
 csapp.[ch]
-tiny/
-driver.sh
+/ignore/
+/tiny/
+/.noproxy
+/.proxy
+/driver.sh
 *.py
-README
+/README
+/webdriver_score*
+
+# Compiled
+*.o
+proxy
