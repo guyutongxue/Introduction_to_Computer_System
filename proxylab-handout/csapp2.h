@@ -1,5 +1,11 @@
-/*
- * csapp2.h - The C++ version of csapp.h
+/**
+ * @file csapp2.h
+ * @author Guyutongxue (guyutongxue@163.com)
+ * @brief A C++ version of original @c csapp.h
+ * @date 2020-12-25
+ * This file use some C++ feature to provide more easy-to-use interface
+ * @copyright Copyright (c) 2020
+ * 
  */
 
 #ifndef CSAPP2_H

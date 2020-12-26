@@ -105,22 +105,23 @@ void deal(int connfd) {
       return;
     }
     auto line_info{parse_uri(uri)};
-    const std::string server_line = method + ' ' + uri + " HTTP/1.0\r\n";
     // Get request header
     const std::string server_header = get_server_header(c_r_rio, line_info);
-    std::clog << server_line << server_header << std::endl;
     auto& [host, path, port]{line_info};
     std::clog << "Host: " << host << '\n'
               << "Path: " << path << '\n'
               << "Port: " << port << '\n';
+    const std::string server_line = method + ' ' + path + " HTTP/1.0\r\n";
+    std::clog << server_line << server_header << std::endl;
     int server_fd{
         csapp::open_clientfd(host.c_str(), std::to_string(port).c_str())};
     csapp::Rio s_r_rio(server_fd);
     csapp::Rio::writen(server_fd, server_line);
     csapp::Rio::writen(server_fd, server_header);
-    for (std::string line; (line = s_r_rio.readlineb(MAXLINE)).size();) {
-      std::clog << "Recieve " << line.size() << " bytes\n";
-      csapp::Rio::writen(connfd, line);
+    // std::string
+    for (char line[MAXLINE]{}; ssize_t size = s_r_rio.readlineb(line, MAXLINE);) {
+      std::clog << "Recieve " << size << " bytes\n";
+      csapp::Rio::writen(connfd, line, size);
     }
     csapp::Close(server_fd);
     csapp::Close(connfd);
@@ -167,7 +168,6 @@ std::string get_server_header(
   for (std::string line;
        (line = utils::rtrim(client.readlineb(MAXLINE))).size();) {
     if (utils::starts_with(line, "Host:"sv)) {
-      // std::get<0>(info) = utils::trim(line.substr(5));
       has_host = true;
     }
     if (!utils::starts_with(line, "Connection:"sv) &&
@@ -185,7 +185,8 @@ std::string get_server_header(
   return oss.str();
 }
 
-void response_error(int connfd, int code, const std::string_view& msg, const std::string& info) {
+void response_error(int connfd, int code, const std::string_view& msg,
+                    const std::string& info) {
   std::ostringstream oss;
   oss << "HTTP/1.0 " << code << " " << msg << "\r\n";
   std::ostringstream content;
@@ -195,8 +196,10 @@ void response_error(int connfd, int code, const std::string_view& msg, const std
   <title> Proxy Error </title>
 </head>
 <body>
-  <h1> )" << code << " " << msg << R"( </h1>
-  <p>)" << info << R"( </p>
+  <h1> )" << code
+          << " " << msg << R"( </h1>
+  <p>)" << info
+          << R"( </p>
   <hr>
   CS:APP ProxyLab (Ubuntu 20.04)
 </body>
