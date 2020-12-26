@@ -50,9 +50,9 @@ std::string trim(std::string&& src) {
 }  // namespace utils
 
 static constexpr const std::string_view user_agent{
-    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:83.0) "
-    "Gecko/20100101 "
-    "Firefox/83.0\r\n"sv};
+    "Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) "
+    "Gecko/20120305 "
+    "Firefox/10.0.3\r\n"sv};
 
 void deal(int);
 auto parse_uri(const std::string& uri)
@@ -101,15 +101,18 @@ void deal(int connfd) {
                      "This proxy cannot deal with Non-GET requests.");
       return;
     }
-    auto cache_read = cache_get(uri);
-    if (cache_read.has_value()) {
+    if (auto cache_read = cache_get(uri); cache_read.has_value()) {
+      std::clog << "URI \"" << uri << "\" cached. Writing...";
       csapp::Rio::writen(connfd, cache_read.value().data(),
                          cache_read.value().size());
+      csapp::Close(connfd);
+      std::clog << "Done" << std::endl;
+      return;
     }
     auto line_info{parse_uri(uri)};
     // Get request header
     const std::string server_header = get_server_header(c_r_rio, line_info);
-    auto& [host, path, port]{line_info};
+    const auto& [host, path, port]{line_info};
     std::clog << "Host: " << host << '\n'
               << "Path: " << path << '\n'
               << "Port: " << port << '\n';
@@ -120,9 +123,9 @@ void deal(int connfd) {
     csapp::Rio s_r_rio(server_fd);
     csapp::Rio::writen(server_fd, server_line);
     csapp::Rio::writen(server_fd, server_header);
-    // std::string is not good for storing binary stream
     CacheContent cache_write{};
     std::size_t cache_size{0};
+    // std::string is not good for storing binary stream
     for (std::array<char, MAXLINE> line{};
          size_t size = s_r_rio.readlineb(line.data(), MAXLINE);) {
       std::clog << "Recieve " << size << " bytes\n";
@@ -135,6 +138,11 @@ void deal(int connfd) {
     }
     csapp::Close(server_fd);
     csapp::Close(connfd);
+    if (cache_size < MAX_OBJECT_SIZE) {
+      std::clog << "Setting cache for \"" << uri << "\"...";
+      cache_set(uri, cache_write);
+      std::clog << "Done." << std::endl;
+    }
   } catch (const csapp::ProxyException& e) {
     std::cerr << "Catch proxy exception: " << e.what() << std::endl;
     response_error(connfd, 500, "Internal Server Error", "Proxy: "s + e.what());
@@ -220,5 +228,9 @@ void response_error(int connfd, int code, const std::string_view& msg,
   oss << "Content-Length: " << content_str.size() << "\r\n";
   oss << "\r\n";
   oss << content_str << std::endl;
-  csapp::Rio::writen(connfd, oss.str());
+  try {
+    csapp::Rio::writen(connfd, oss.str());
+  } catch (...) {
+    // Who cares???
+  }
 }

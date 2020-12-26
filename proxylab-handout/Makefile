@@ -37,7 +37,8 @@ proxy: proxy.o csapp.o cache.o libcsapp.a
 handin:
 	(make clean; \
 	cd ..; \
-	tar --exclude='ignore' -czvf proxylab-handin.tar.gz proxylab-handout)
+	tar --exclude='ignore' --exclude='.noproxy' --exclude='.proxy' \
+		-czvf proxylab-handin.tar.gz proxylab-handout)
 
 clean:
 	rm -f *~ *.o proxy core *.tar *.zip *.gzip *.bzip *.gz

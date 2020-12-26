@@ -35,9 +35,6 @@ struct CacheBlock {
   mutable std::mutex read_cnt_mutex;
 };
 
-extern std::array<CacheBlock, CACHE_BLOCK_NUM> cache;
-extern std::size_t current_lru;
-
 void cache_set(const std::string& uri, const CacheContent& content);
 std::optional<const CacheContent> cache_get(const std::string& uri);
 
