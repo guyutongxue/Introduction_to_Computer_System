@@ -14,11 +14,8 @@
 #include <sstream>
 #include <thread>
 
+#include "./cache.h"
 #include "./csapp2.h"
-
-// Recommended max cache and object sizes
-constexpr const size_t MAX_CACHE_SIZE{1049000};
-constexpr const size_t MAX_OBJECT_SIZE{102400};
 
 using namespace std::literals;
 using csapp::MAXLINE;
@@ -104,6 +101,11 @@ void deal(int connfd) {
                      "This proxy cannot deal with Non-GET requests.");
       return;
     }
+    auto cache_read = cache_get(uri);
+    if (cache_read.has_value()) {
+      csapp::Rio::writen(connfd, cache_read.value().data(),
+                         cache_read.value().size());
+    }
     auto line_info{parse_uri(uri)};
     // Get request header
     const std::string server_header = get_server_header(c_r_rio, line_info);
@@ -118,10 +120,18 @@ void deal(int connfd) {
     csapp::Rio s_r_rio(server_fd);
     csapp::Rio::writen(server_fd, server_line);
     csapp::Rio::writen(server_fd, server_header);
-    // std::string
-    for (char line[MAXLINE]{}; ssize_t size = s_r_rio.readlineb(line, MAXLINE);) {
+    // std::string is not good for storing binary stream
+    CacheContent cache_write{};
+    std::size_t cache_size{0};
+    for (std::array<char, MAXLINE> line{};
+         size_t size = s_r_rio.readlineb(line.data(), MAXLINE);) {
       std::clog << "Recieve " << size << " bytes\n";
-      csapp::Rio::writen(connfd, line, size);
+      csapp::Rio::writen(connfd, line.data(), size);
+      if (cache_size + size < MAX_OBJECT_SIZE) {
+        std::copy(line.begin(), line.begin() + size,
+                  cache_write.begin() + cache_size);
+        cache_size += size;
+      }
     }
     csapp::Close(server_fd);
     csapp::Close(connfd);

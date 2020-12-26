@@ -682,11 +682,11 @@ static ssize_t rio_readlineb(rio_t* rp, void* usrbuf, size_t maxlen) {
  * Wrappers for robust I/O routines, rewrite with class
  **********************************/
 
-ssize_t Rio::readn(int fd, char* s, size_t bytes) {
+size_t Rio::readn(int fd, char* s, size_t bytes) {
   if (ssize_t n{rio_readn(fd, s, bytes)}; n < 0)
     unix_error("Rio_readn error");
   else
-    return n;
+    return static_cast<size_t>(n);
 }
 
 void Rio::writen(int fd, const char* s, size_t bytes) {
@@ -700,11 +700,11 @@ void Rio::writen(int fd, const std::string_view& s) {
 
 Rio::Rio(int fd) { rio_readinitb(&rio, fd); }
 
-ssize_t Rio::readnb(char* s, size_t bytes) {
+size_t Rio::readnb(char* s, size_t bytes) {
   if (ssize_t rc = rio_readnb(&rio, s, bytes); rc < 0)
     unix_error("Rio_readnb error");
   else
-    return rc;
+    return static_cast<size_t>(rc);
 }
 
 std::string Rio::readnb(size_t bytes) {
@@ -713,11 +713,11 @@ std::string Rio::readnb(size_t bytes) {
   return std::string(usrbuf);
 }
 
-ssize_t Rio::readlineb(char* s, size_t maxlen) {
+size_t Rio::readlineb(char* s, size_t maxlen) {
   if (ssize_t rc = rio_readlineb(&rio, s, maxlen); rc < 0)
     unix_error("Rio_readlineb error");
   else
-    return rc;
+    return static_cast<size_t>(rc);
 }
 
 std::string Rio::readlineb(size_t maxlen) {

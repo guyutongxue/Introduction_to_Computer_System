@@ -56,10 +56,17 @@
     "sstream": "cpp",
     "streambuf": "cpp",
     "cinttypes": "cpp",
-    "bit": "cpp"
+    "bit": "cpp",
+    "chrono": "cpp",
+    "condition_variable": "cpp",
+    "ctime": "cpp",
+    "ratio": "cpp",
+    "mutex": "cpp",
+    "thread": "cpp"
   },
   "editor.rulers": [
     80
   ],
-  "editor.formatOnType": false
+  "editor.formatOnType": false,
+  "editor.tabSize": 2
 }

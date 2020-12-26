@@ -10,4 +10,5 @@ csapp.[ch]
 
 # Compiled
 *.o
+*.a
 proxy

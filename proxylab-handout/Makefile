@@ -8,8 +8,8 @@
 CC = gcc
 CPPC = g++
 CFLAGS = -g -Wall
-CPPFLAGS = -g -Wall -Wextra -std=c++17
-LDFLAGS = -pthread
+CPPFLAGS = -g -Wall -Wextra -std=c++17 -O3
+LDFLAGS = -pthread -lcsapp
 
 .PHONY: all
 
@@ -17,14 +17,20 @@ all: proxy
 
 # csapp.o: csapp.c csapp.h
 # 	$(CC) $(CFLAGS) -c csapp.c
-csapp.o: csapp2.cpp csapp2.h
-	$(CPPC) ${CPPFLAGS} -c csapp2.cpp -o csapp.o
+libcsapp.a: csapp.o
+	ar rv libcsapp.a csapp.o
 
-proxy.o: proxy.cpp csapp2.h
+csapp.o: csapp2.cpp csapp2.h
+	$(CPPC) $(CPPFLAGS) -c csapp2.cpp -o csapp.o
+
+cache.o: cache.cpp cache.h
+	$(CPPC) $(CPPFLAGS) -c cache.cpp
+
+proxy.o: proxy.cpp cache.h csapp2.h
 	$(CPPC) $(CPPFLAGS) -c proxy.cpp
 
-proxy: proxy.o csapp.o
-	$(CPPC) $(CPPFLAGS) proxy.o csapp.o -o proxy $(LDFLAGS)
+proxy: proxy.o csapp.o cache.o libcsapp.a
+	$(CPPC) $(CPPFLAGS) -L. proxy.o cache.o -o proxy $(LDFLAGS)
 
 # Creates a tarball in ../proxylab-handin.tar that you should then
 # hand in to Autolab. DO NOT MODIFY THIS!

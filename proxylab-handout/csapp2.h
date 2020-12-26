@@ -196,13 +196,13 @@ class Rio {
   rio_t rio;
 
  public:
-  static ssize_t readn(int fd, char* s, size_t bytes);
+  static size_t readn(int fd, char* s, size_t bytes);
   static void writen(int fd, const char* s, size_t bytes);
   static void writen(int fd, const std::string_view& s);
   Rio(int fd);
-  ssize_t readnb(char* s, size_t bytes);
+  size_t readnb(char* s, size_t bytes);
   std::string readnb(size_t bytes);
-  ssize_t readlineb(char* s, size_t maxlen);
+  size_t readlineb(char* s, size_t maxlen);
   std::string readlineb(size_t maxlen);
 };
 
