@@ -8,7 +8,7 @@
 CC = gcc
 CPPC = g++
 CFLAGS = -g -Wall
-CPPFLAGS = -g -Wall -Wextra -std=c++17 -O3
+CPPFLAGS = -g -Wall -Wextra -std=c++17
 LDFLAGS = -pthread -lcsapp
 
 .PHONY: all

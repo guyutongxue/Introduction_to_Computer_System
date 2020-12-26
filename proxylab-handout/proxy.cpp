@@ -3,7 +3,7 @@
  * @author Guyutongxue (1900012983@pku.edu.cn)
  * @brief
  * @version 0.1
- * @date 2020-12-23 ~ ?
+ * @date 2020-12-23 ~ 2020-12-26
  * I really don't understand why you guys are so eager
  * to make trouble for students.
  * @copyright Copyright (c) 2020
@@ -21,8 +21,13 @@ using namespace std::literals;
 using csapp::MAXLINE;
 
 namespace utils {
-// Case-insensitive comparison (boost::iequals)
-// C++20 std::string::starts_with
+/**
+ * @brief Case-insensitive comparison (boost::iequals)
+ * works like C++20 std::string::starts_with
+ * @param s The source string
+ * @param t The short pattern string
+ * @return Whether @c s is start with @c t
+ */
 bool starts_with(const std::string& s, const std::string_view& t) {
   return std::equal(t.begin(), t.end(), s.begin(),
                     [](unsigned char a, unsigned char b) {
@@ -30,12 +35,28 @@ bool starts_with(const std::string& s, const std::string_view& t) {
                     });
 }
 // small functions for removing trailing "\\r\\n"
+// Because std::string::erase will modify original string,
+// this group of functions only accept rvalue-ref as argument
+
+/**
+ * @brief Remove left-trailing white-space-character
+ *
+ * @param src The string to be trimmed
+ * @return Trimmed string
+ */
 std::string ltrim(std::string&& src) {
   src.erase(src.begin(),
             std::find_if(src.begin(), src.end(),
                          [](unsigned char c) { return !std::isspace(c); }));
   return src;
 }
+
+/**
+ * @brief Remove right-trailing white-space-character
+ *
+ * @param src The string to be trimmed
+ * @return Trimmed string
+ */
 std::string rtrim(std::string&& src) {
   src.erase(std::find_if(src.rbegin(), src.rend(),
                          [](unsigned char c) { return !std::isspace(c); })
@@ -43,12 +64,23 @@ std::string rtrim(std::string&& src) {
             src.end());
   return src;
 }
+
+/**
+ * @brief Remove both-side-trailing white-space-character
+ *
+ * @param src The string to be trimmed
+ * @return Trimmed string
+ */
 std::string trim(std::string&& src) {
   return ltrim(std::move(src)), rtrim(std::move(src)), src;
 }
 
 }  // namespace utils
 
+/**
+ * @brief User-Agent that writeup provided
+ *
+ */
 static constexpr const std::string_view user_agent{
     "Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) "
     "Gecko/20120305 "
@@ -81,11 +113,16 @@ int main(int argc, char** argv) {
   }
 }
 
+/**
+ * @brief Deal with request from client
+ *
+ * @param connfd Connect-file-descriptor
+ */
 void deal(int connfd) {
   try {
-    // Client reading RIO
+    // Client-reading RIO
     csapp::Rio c_r_rio(connfd);
-    // Get request line
+    // Get request line from client
     std::istringstream iss(c_r_rio.readlineb(MAXLINE));
     std::string method, uri, version;
     iss >> method >> uri >> version;
@@ -101,6 +138,7 @@ void deal(int connfd) {
                      "This proxy cannot deal with Non-GET requests.");
       return;
     }
+    // Get cache
     if (auto cache_read = cache_get(uri); cache_read.has_value()) {
       std::clog << "URI \"" << uri << "\" cached. Writing...";
       csapp::Rio::writen(connfd, cache_read.value().data(),
@@ -112,15 +150,19 @@ void deal(int connfd) {
     auto line_info{parse_uri(uri)};
     // Get request header
     const std::string server_header = get_server_header(c_r_rio, line_info);
+    // Split request line from client, and make request line to server
     const auto& [host, path, port]{line_info};
     std::clog << "Host: " << host << '\n'
               << "Path: " << path << '\n'
               << "Port: " << port << '\n';
     const std::string server_line = method + ' ' + path + " HTTP/1.0\r\n";
     std::clog << server_line << server_header << std::endl;
+    // Open connection to server
     int server_fd{
         csapp::open_clientfd(host.c_str(), std::to_string(port).c_str())};
+    // Server-reading RIO
     csapp::Rio s_r_rio(server_fd);
+    // Send request line and request header to server
     csapp::Rio::writen(server_fd, server_line);
     csapp::Rio::writen(server_fd, server_header);
     CacheContent cache_write{};
@@ -138,23 +180,36 @@ void deal(int connfd) {
     }
     csapp::Close(server_fd);
     csapp::Close(connfd);
+    // Set cache
     if (cache_size < MAX_OBJECT_SIZE) {
       std::clog << "Setting cache for \"" << uri << "\"...";
       cache_set(uri, cache_write);
       std::clog << "Done." << std::endl;
     }
   } catch (const csapp::ProxyException& e) {
+    // Exceptions from proxy-ish-func, like RIO etc.
     std::cerr << "Catch proxy exception: " << e.what() << std::endl;
     response_error(connfd, 500, "Internal Server Error", "Proxy: "s + e.what());
   } catch (const std::exception& e) {
+    // Exceptions from other-func, like string parsing error
     std::cerr << "Catch non-proxy exception: " << e.what() << std::endl;
     response_error(connfd, 500, "Internal Server Error", e.what());
   } catch (...) {
+    // Should never happened
     std::cerr << "Catch unrecognized exception." << std::endl;
     std::exit(EXIT_FAILURE);
   }
 }
 
+/**
+ * @brief Parse URI to three part
+ * Split URI to 3 part:
+ * - Host: used in @c Host: header send to server
+ * - Path: used in request line send to server
+ * - Port: used in open_clientfd
+ * @param uri The URI to parse
+ * @return (host, path, port) tuple
+ */
 auto parse_uri(const std::string& uri)
     -> std::tuple<std::string, std::string, std::uint16_t> {
   std::uint16_t port{80};
@@ -177,6 +232,13 @@ auto parse_uri(const std::string& uri)
   return std::make_tuple(host, path, port);
 }
 
+/**
+ * @brief Get request header from client, while making new request header
+ * Dealing with special rules on @c Host: , @c Connection: , @c User-Agent: etc.
+ * @param client RIO object to read request header from client
+ * @param info Parsed (host, path, port) from @c parse_uri
+ * @return The request header which will be sent to server
+ */
 std::string get_server_header(
     csapp::Rio& client,
     std::tuple<std::string, std::string, std::uint16_t>& info) {
@@ -203,6 +265,14 @@ std::string get_server_header(
   return oss.str();
 }
 
+/**
+ * @brief Returning error to client
+ * If error occurs in this stage, do nothing.
+ * @param connfd Client connect-file-descriptor
+ * @param code HTTP status code (4** or 5**)
+ * @param msg The message correspond to @c code
+ * @param info More info on this error
+ */
 void response_error(int connfd, int code, const std::string_view& msg,
                     const std::string& info) {
   std::ostringstream oss;
