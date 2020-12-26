@@ -40,6 +40,8 @@ handin:
 	tar --exclude='ignore' --exclude='.noproxy' --exclude='.proxy' \
 		-czvf proxylab-handin.tar.gz proxylab-handout)
 
+.PHONY: clean
+
 clean:
-	rm -f *~ *.o proxy core *.tar *.zip *.gzip *.bzip *.gz
+	rm -f *~ *.o *.a proxy core *.tar *.zip *.gzip *.bzip *.gz
 

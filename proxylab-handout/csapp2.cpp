@@ -5,8 +5,11 @@
  * @date 2020-12-25
  * This file use some C++ feature to provide more easy-to-use interface
  * @copyright Copyright (c) 2020 Guyutongxue
- * 
+ *
  */
+
+// This file is distributed under WTFPL <https://www.wtfpl.net> 
+// WITHOUT ANY WARRANTY.
 
 #include "./csapp2.h"
 

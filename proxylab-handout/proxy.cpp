@@ -1,12 +1,11 @@
 /**
  * @file proxy.cpp
  * @author Guyutongxue (1900012983@pku.edu.cn)
- * @brief
+ * @brief This file is part of CSAPP3e ProxyLab.
  * @version 0.1
  * @date 2020-12-23 ~ 2020-12-26
- * I really don't understand why you guys are so eager
- * to make trouble for students.
- * @copyright Copyright (c) 2020
+ * 
+ * @copyright Copyright (c) 2020 Guyutongxue
  *
  */
 #include <algorithm>
@@ -107,7 +106,7 @@ int main(int argc, char** argv) {
     sockaddr_storage client_addr;
     int connfd{csapp::Accept(listenfd, client_addr)};
     const auto [host, port]{csapp::Getnameinfo(client_addr, 0)};
-    std::cout << "Accepted connection from " << host << ":" << port
+    std::clog << "Accepted connection from " << host << ":" << port
               << std::endl;
     std::thread(deal, connfd).detach();
   }
@@ -215,15 +214,18 @@ auto parse_uri(const std::string& uri)
   std::uint16_t port{80};
   std::string host{uri};
   std::string path("/");
+  // remove protocol
   auto double_slash_pos{uri.find("//")};
   if (double_slash_pos != std::string::npos) {
     host = uri.substr(double_slash_pos + 2);
   }
+  // split path
   auto slash_pos{host.find('/')};
   if (slash_pos != std::string::npos) {
     path = host.substr(slash_pos);
   }
   host = host.substr(0, slash_pos);
+  // split port
   auto colon_pos(host.find(':'));
   if (colon_pos != std::string::npos) {
     port = std::stoi(host.substr(colon_pos + 1));
@@ -243,7 +245,6 @@ std::string get_server_header(
     csapp::Rio& client,
     std::tuple<std::string, std::string, std::uint16_t>& info) {
   std::ostringstream oss;
-
   bool has_host{false};
   for (std::string line;
        (line = utils::rtrim(client.readlineb(MAXLINE))).size();) {
@@ -256,6 +257,7 @@ std::string get_server_header(
       oss << line << "\r\n";
     }
   }
+  // If original request don't have Host, add it from parsed URI
   if (!has_host) {
     oss << std::get<0>(info) << "\r\n";
   }
@@ -278,6 +280,7 @@ void response_error(int connfd, int code, const std::string_view& msg,
   std::ostringstream oss;
   oss << "HTTP/1.0 " << code << " " << msg << "\r\n";
   std::ostringstream content;
+  // Print a small HTML showing error
   content << R"(<!DOCTYPE html>
 <html>
 <head>

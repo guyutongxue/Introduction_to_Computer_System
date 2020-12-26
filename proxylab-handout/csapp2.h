@@ -8,6 +8,9 @@
  * 
  */
 
+// This file is distributed under WTFPL <https://www.wtfpl.net> 
+// WITHOUT ANY WARRANTY.
+
 #ifndef CSAPP2_H
 #define CSAPP2_H
 
