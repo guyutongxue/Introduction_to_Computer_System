@@ -65,3 +65,18 @@ Edited files:
 - `mm.c`
 
 ## ProxyLab
+
+Removed files:
+- `proxy.c`
+- `csapp.c`
+- `csapp.h`
+
+Modified files:
+- `Makefile`
+
+New files:
+- `proxy.cpp`
+- `csapp2.cpp`
+- `csapp2.h`
+- `cache.h`
+- `cache.cpp`
