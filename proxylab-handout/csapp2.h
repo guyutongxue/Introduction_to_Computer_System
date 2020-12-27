@@ -5,10 +5,10 @@
  * @date 2020-12-25
  * This file use some C++ feature to provide more easy-to-use interface
  * @copyright Copyright (c) 2020
- * 
+ *
  */
 
-// This file is distributed under WTFPL <https://www.wtfpl.net> 
+// This file is distributed under WTFPL <https://www.wtfpl.net>
 // WITHOUT ANY WARRANTY.
 
 #ifndef CSAPP2_H
@@ -209,14 +209,45 @@ class Rio {
   std::string readlineb(size_t maxlen);
 };
 
-class ProxyException : public std::exception {
+class SystemException : public std::exception {
  private:
   std::string msg;
 
  public:
-  ProxyException(const std::string& msg) : msg{msg} {}
-  ~ProxyException() {}
+  SystemException(const std::string& msg) : msg{msg} {}
+  ~SystemException() {}
   const char* what() const noexcept { return msg.c_str(); }
+};
+
+/**
+ * @brief More error msg about @c get_addr_info
+ * 
+ */
+class GaiException : public SystemException {
+ private:
+  int ecode;
+
+ public:
+  GaiException(const std::string& msg, int ecode)
+      : SystemException(msg), ecode{ecode} {}
+  ~GaiException() {}
+  std::pair<int, std::string_view> getHTTPStatus() const {
+    switch (ecode) {
+      case EAI_ADDRFAMILY:
+        return {501, "Not Implemented"};
+      case EAI_AGAIN:
+        return {503, "Service Unavailable"};
+      case EAI_MEMORY:
+        return {507, "Insufficient Storage"};
+      case EAI_NONAME:
+      case EAI_NODATA:
+        return {400, "Bad Request"};
+      case EAI_INPROGRESS:
+        return {429, "Too Many Requests"};
+      default:
+        return {500, "Internal Error"};
+    }
+  }
 };
 
 /* Reentrant protocol-independent client/server helpers */

@@ -4,7 +4,7 @@
  * @brief This file is part of CSAPP3e ProxyLab.
  * @version 0.1
  * @date 2020-12-23 ~ 2020-12-26
- * 
+ *
  * @copyright Copyright (c) 2020 Guyutongxue
  *
  */
@@ -125,6 +125,10 @@ void deal(int connfd) {
     std::istringstream iss(c_r_rio.readlineb(MAXLINE));
     std::string method, uri, version;
     iss >> method >> uri >> version;
+    if (uri.size() > 5000) {
+      response_error(connfd, 414, "Request-URI Too Long");
+      return;
+    }
     if (iss.fail()) {
       response_error(connfd, 400, "Bad Request");
       return;
@@ -134,7 +138,7 @@ void deal(int connfd) {
     std::clog << "Version: " << version << '\n';
     if (method != "GET") {
       response_error(connfd, 501, "Not Implemented",
-                     "This proxy cannot deal with Non-GET requests.");
+                     "This proxy cannot deal with non-GET requests.");
       return;
     }
     // Get cache
@@ -185,13 +189,18 @@ void deal(int connfd) {
       cache_set(uri, cache_write);
       std::clog << "Done." << std::endl;
     }
-  } catch (const csapp::ProxyException& e) {
-    // Exceptions from proxy-ish-func, like RIO etc.
-    std::cerr << "Catch proxy exception: " << e.what() << std::endl;
-    response_error(connfd, 500, "Internal Server Error", "Proxy: "s + e.what());
+  } catch (const csapp::GaiException& e) {
+    // Exceptions from get_addr_info
+    std::cerr << "Catch GAI exception: " << e.what() << std::endl;
+    response_error(connfd, e.getHTTPStatus().first, e.getHTTPStatus().second,
+                   e.what());
+  } catch (const csapp::SystemException& e) {
+    // Exceptions from syscall/csapp-func, like RIO etc.
+    std::cerr << "Catch system exception: " << e.what() << std::endl;
+    response_error(connfd, 500, "Internal Server Error", e.what());
   } catch (const std::exception& e) {
     // Exceptions from other-func, like string parsing error
-    std::cerr << "Catch non-proxy exception: " << e.what() << std::endl;
+    std::cerr << "Catch exception: " << e.what() << std::endl;
     response_error(connfd, 500, "Internal Server Error", e.what());
   } catch (...) {
     // Should never happened

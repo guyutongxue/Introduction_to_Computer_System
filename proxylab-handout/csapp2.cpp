@@ -22,24 +22,24 @@ using namespace std::literals;
  **************************/
 /* Unix-style error */
 [[noreturn]] void unix_error(const char* msg) {
-  throw ProxyException(msg + ": "s + strerror(errno));
+  throw SystemException(msg + ": "s + strerror(errno));
 }
 
 /* Posix-style error */
 [[noreturn]] void posix_error(int code, const char* msg) {
-  throw ProxyException(msg + ": "s + strerror(code));
+  throw SystemException(msg + ": "s + strerror(code));
 }
 
 /* Getaddrinfo-style error */
 [[noreturn]] void gai_error(int code, const char* msg) {
-  throw ProxyException(msg + ": "s + gai_strerror(code));
+  throw GaiException(msg + ": "s + gai_strerror(code), code);
 }
 
 /* Application error */
-[[noreturn]] void app_error(const char* msg) { throw ProxyException(msg); }
+[[noreturn]] void app_error(const char* msg) { throw SystemException(msg); }
 
 /* Obsolete gethostbyname error */
-[[noreturn]] void dns_error(const char* msg) { throw ProxyException(msg); }
+[[noreturn]] void dns_error(const char* msg) { throw SystemException(msg); }
 
 /*********************************************
  * Wrappers for Unix process control functions
