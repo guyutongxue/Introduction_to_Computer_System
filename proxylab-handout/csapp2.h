@@ -156,7 +156,7 @@ void Connect(int sockfd, const SockAddrT& serv);
 void Getaddrinfo(const char* node, const char* service,
                  const struct addrinfo* hints, struct addrinfo** res);
 template <typename SockAddrT>
-auto GetnameInfo(const SockAddrT& sa) -> std::pair<std::string, std::string>;
+auto Getnameinfo(const SockAddrT& sa) -> std::pair<std::string, std::string>;
 void Freeaddrinfo(struct addrinfo* res);
 void Inet_ntop(int af, const void* src, char* dst, socklen_t size);
 void Inet_pton(int af, const char* src, void* dst);
