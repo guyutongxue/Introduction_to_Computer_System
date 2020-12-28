@@ -168,14 +168,15 @@ void deal(int connfd) {
     // Send request line and request header to server
     csapp::Rio::writen(server_fd, server_line);
     csapp::Rio::writen(server_fd, server_header);
-    CacheContent cache_write{};
-    std::size_t cache_size{0};
+    CacheContent cache_write{};  //< Content will be writen to cache
+    std::size_t cache_size{0};   //< How many bytes cached
+    bool enable_cache{true};     //< Whether this response will be cached
     // std::string is not good for storing binary stream
     for (std::array<char, MAXLINE> line{};
          size_t size = s_r_rio.readlineb(line.data(), MAXLINE);) {
       std::clog << "Recieve " << size << " bytes\n";
       csapp::Rio::writen(connfd, line.data(), size);
-      if (cache_size + size < MAX_OBJECT_SIZE) {
+      if ((enable_cache = cache_size + size < MAX_OBJECT_SIZE)) {
         std::copy(line.begin(), line.begin() + size,
                   cache_write.begin() + cache_size);
         cache_size += size;
@@ -184,7 +185,7 @@ void deal(int connfd) {
     csapp::Close(server_fd);
     csapp::Close(connfd);
     // Set cache
-    if (cache_size < MAX_OBJECT_SIZE) {
+    if (enable_cache) {
       std::clog << "Setting cache for \"" << uri << "\"...";
       cache_set(uri, cache_write);
       std::clog << "Done." << std::endl;
@@ -312,6 +313,7 @@ void response_error(int connfd, int code, const std::string_view& msg,
   oss << content_str << std::endl;
   try {
     csapp::Rio::writen(connfd, oss.str());
+    csapp::Close(connfd);
   } catch (...) {
     // Who cares???
   }
