@@ -2,7 +2,7 @@
 
 This repo provide solutions, writeups and handouts of CS:APP3e lab. Notice that these labs will be modified every year, depends on the mood of TAs each year. That's what PKU like, right? ;)
 
-**Anyone who copies this repository shall be held fully responsible for their actions.**
+**Anyone who copies this repository shall be held fully responsible for his actions.**
 
 ## DataLab
 
