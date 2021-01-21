@@ -1,5 +1,8 @@
+# CS:APP3e Lab solutions (PKU-ver, not full score)
 
+This repo provide solutions, writeups and handouts of CS:APP3e lab. Notice that these labs will be modified every year, depends on the mood of TAs each year. That's what PKU like, right? ;)
 
+**Anyone who copies this repository shall be held fully responsible for their actions.**
 
 ## DataLab
 
@@ -8,7 +11,7 @@ Edited files:
 
 ## BombLab
 
-*Online lab*
+*Online lab, handout not unique*
 
 Edited files:
 - Patched `bomb`
@@ -32,9 +35,11 @@ Edit files:
 - `sim/pipe/pipe-full.hcl`
 - `sim/pipe/ncopy.ys`
 
+**Score 187.9/190**
+
 ## AttackLab
 
-*Online lab*
+*Online lab, handout not unique*
 
 New files:
 - `phase*.txt`
@@ -54,6 +59,8 @@ New files:
 Edited files:
 - `trans.c`
 
+**Score 59.6/60**
+
 ## ShellLab `tshlab`
 
 Edited files:
@@ -63,6 +70,8 @@ Edited files:
 
 Edited files:
 - `mm.c`
+
+**Score 118/120**
 
 ## ProxyLab
 
